@@ -1,0 +1,70 @@
+# ---------------------------------------------------------------------------
+# CMake
+# ---------------------------------------------------------------------------
+out/
+build/
+build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+compile_commands.json
+CMakeUserPresets.json
+
+# ---------------------------------------------------------------------------
+# Visual Studio / MSVC
+# ---------------------------------------------------------------------------
+.vs/
+*.user
+*.suo
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+ipch/
+*.ilk
+*.pdb
+*.idb
+*.obj
+*.exp
+*.lib
+*.exe
+*.dll
+
+# ---------------------------------------------------------------------------
+# vcpkg (only relevant if you ever vendor vcpkg inside the repo, or if a
+# local build accidentally drops its install tree here — the toolchain
+# file itself lives outside the project via VCPKG_ROOT, not in-repo)
+# ---------------------------------------------------------------------------
+vcpkg_installed/
+vcpkg-bootstrap.log
+
+# ---------------------------------------------------------------------------
+# Ninja (used by the CMake presets as the generator)
+# ---------------------------------------------------------------------------
+.ninja_deps
+.ninja_log
+build.ninja
+rules.ninja
+
+# ---------------------------------------------------------------------------
+# Editors
+# ---------------------------------------------------------------------------
+.vscode/
+*.swp
+*~
+
+# ---------------------------------------------------------------------------
+# OS cruft
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# Folio-specific: exported output files you generate while testing the
+# compiler (PDFs/PNGs/SVGs produced from .folio sources). Keep .folio
+# source files tracked; don't track their generated exports.
+# ---------------------------------------------------------------------------
+*.pdf
+*.png
+*.svg
+!/examples/**/*.svg
