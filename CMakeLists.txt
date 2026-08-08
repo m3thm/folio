@@ -13,7 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_library(folio_core
     src/lexer/lexer.cpp
     src/parser/parser.cpp
-)
+ "src/token.hpp")
 
 target_include_directories(folio_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -30,7 +30,7 @@ endif()
 
 # CLI executable — will parse a .folio file passed as argv[1].
 
-add_executable(folioc src/main.cpp)
+add_executable(folioc src/main.cpp "src/token.hpp")
 target_link_libraries(folioc PRIVATE folio_core)
 
 

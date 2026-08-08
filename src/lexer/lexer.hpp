@@ -1,14 +1,36 @@
 #pragma once
 
-#include "ast/ast.hpp"
+#include "token.hpp"
+#include <string>
+#include <vector>
 
-// Lexer for folio source (.folio files).
 
 namespace folio {
 
-// TODO: declare a Lexer class here.
-// construct with the full source string, expose a tokenize() 
-// method (or next_token() for a pull-based interface) that
-// returns Tokens as defined in ast.hpp.
+    class Lexer {
+        public:
+            explicit Lexer(std::string source);
+
+            std::vector<Token> tokenize();
+
+        private:
+            std::string source;
+            std::size_t position = 0;
+            std::size_t line = 1;
+            std::size_t column = 1;
+
+            char peek(std::size_t offset = 0) const;
+            char advance();
+            bool match(char expected);
+            bool isAtEnd() const;
+
+            void skipWhitespaceAndComments();
+
+            Token makeToken(TokenKind kind, std::string text, std::size_t startLine, std::size_t startCol);
+            Token isNumber();
+            Token isIdentOrKeyword();
+            Token isString();
+            Token isHexColor();
+    };
 
 } 

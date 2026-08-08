@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ast/ast.hpp"
+#include "token.hpp"
 
 // Recursive-descent parser for Folio (.folio files).
 
