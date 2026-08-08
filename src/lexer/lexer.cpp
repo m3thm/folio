@@ -105,7 +105,13 @@ namespace folio {
                 text += c;
             }
         }
-        if (!isAtEnd()) advance(); // consume closing quote
+        if (isAtEnd()) {
+            // Hit end-of-input before a closing quote was found. This is a
+            // lexical error, not a valid (if oddly-terminated) string — flag
+            // it so the parser doesn't mistake it for well-formed input.
+            return makeToken(TokenKind::Invalid, text, startLine, startCol);
+        }
+        advance(); // consume closing quote
         return makeToken(TokenKind::String, text, startLine, startCol);
     }
 
@@ -115,6 +121,13 @@ namespace folio {
         std::string text;
         text += advance(); // consume '#'
         while (std::isxdigit(static_cast<unsigned char>(peek()))) text += advance();
+
+        // HEXCOLOR := '#' [0-9a-fA-F]{6,8} — anything else (too short, too
+        // long, or a digit count that isn't 6 or 8) is lexically invalid.
+        std::size_t digitCount = text.size() - 1; // exclude the leading '#'
+        if (digitCount != 6 && digitCount != 8) {
+            return makeToken(TokenKind::Invalid, text, startLine, startCol);
+        }
         return makeToken(TokenKind::HexColor, text, startLine, startCol);
     }
 
@@ -157,6 +170,7 @@ namespace folio {
             case ':': tokens.push_back(makeToken(TokenKind::Colon, ":", startLine, startCol)); break;
             case ',': tokens.push_back(makeToken(TokenKind::Comma, ",", startLine, startCol)); break;
             case '.': tokens.push_back(makeToken(TokenKind::Dot, ".", startLine, startCol)); break;
+            case ';': tokens.push_back(makeToken(TokenKind::Semicolon, ";", startLine, startCol)); break;
             case '+': tokens.push_back(makeToken(TokenKind::Plus, "+", startLine, startCol)); break;
             case '*': tokens.push_back(makeToken(TokenKind::Star, "*", startLine, startCol)); break;
             case '/': tokens.push_back(makeToken(TokenKind::Slash, "/", startLine, startCol)); break;
@@ -169,8 +183,8 @@ namespace folio {
                 break;
             case '=':
                 if (match('=')) tokens.push_back(makeToken(TokenKind::EqEq, "==", startLine, startCol));
-                else if (match('>')) tokens.push_back(makeToken(TokenKind::Arrow, "=>", startLine, startCol));
-                else tokens.push_back(makeToken(TokenKind::Invalid, "=", startLine, startCol));
+                else if (match('>')) tokens.push_back(makeToken(TokenKind::FatArrow, "=>", startLine, startCol));
+                else tokens.push_back(makeToken(TokenKind::Eq, "=", startLine, startCol));
                 break;
             case '<':
                 tokens.push_back(match('=')
@@ -184,7 +198,7 @@ namespace folio {
                 break;
             case '-':
                 tokens.push_back(match('>')
-                    ? makeToken(TokenKind::Arrow, "->", startLine, startCol)
+                    ? makeToken(TokenKind::ThinArrow, "->", startLine, startCol)
                     : makeToken(TokenKind::Minus, "-", startLine, startCol));
                 break;
             case '&':

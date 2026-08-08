@@ -16,12 +16,13 @@ namespace folio {
         LBrace, RBrace,     // { }
         LParen, RParen,     // ( )
         LBracket, RBracket, // [ ]
-        Colon, Comma, Dot,
-        Arrow,               // ->
+        Colon, Comma, Dot, Semicolon,
+        ThinArrow,            // ->
+        FatArrow,             // =>  (unused by the grammar today; kept distinct from ThinArrow so the parser isn't blocked if/when it's needed later)
 
         // operators
         Plus, Minus, Star, Slash, Percent,
-        Lt, Gt, Le, Ge, EqEq, NotEq,
+        Lt, Gt, Le, Ge, Eq, EqEq, NotEq,
         AndAnd, OrOr, Bang, Question,
 
         End,     // end of input
@@ -35,4 +36,4 @@ namespace folio {
         std::size_t column;
     };
 
-} 
+}
