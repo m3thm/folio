@@ -36,4 +36,43 @@ namespace folio {
         SourceSpan span;
     };
 
+    inline const char* tokenKindName(TokenKind kind) {
+        switch (kind) {
+            case TokenKind::Ident: return "Ident";
+            case TokenKind::Number: return "Number";
+            case TokenKind::String: return "String";
+            case TokenKind::HexColor: return "HexColor";
+            case TokenKind::LBrace: return "LBrace";
+            case TokenKind::RBrace: return "RBrace";
+            case TokenKind::LParen: return "LParen";
+            case TokenKind::RParen: return "RParen";
+            case TokenKind::LBracket: return "LBracket";
+            case TokenKind::RBracket: return "RBracket";
+            case TokenKind::Colon: return "Colon";
+            case TokenKind::Comma: return "Comma";
+            case TokenKind::Dot: return "Dot";
+            case TokenKind::Semicolon: return "Semicolon";
+            case TokenKind::ThinArrow: return "ThinArrow";
+            case TokenKind::FatArrow: return "FatArrow";
+            case TokenKind::Plus: return "Plus";
+            case TokenKind::Minus: return "Minus";
+            case TokenKind::Star: return "Star";
+            case TokenKind::Slash: return "Slash";
+            case TokenKind::Percent: return "Percent";
+            case TokenKind::Lt: return "Lt";
+            case TokenKind::Gt: return "Gt";
+            case TokenKind::Le: return "Le";
+            case TokenKind::Ge: return "Ge";
+            case TokenKind::Eq: return "Eq";
+            case TokenKind::EqEq: return "EqEq";
+            case TokenKind::NotEq: return "NotEq";
+            case TokenKind::AndAnd: return "AndAnd";
+            case TokenKind::OrOr: return "OrOr";
+            case TokenKind::Bang: return "Bang";
+            case TokenKind::Question: return "Question";
+            case TokenKind::End: return "End";
+            case TokenKind::Invalid: return "Invalid";
+        }
+        return "Unknown";
+    }
 }

@@ -1,0 +1,12 @@
+// A small example page
+page {
+    size: [612, 792];
+    background: #FFAA00;
+
+    rect(0, 0) -> fill: "red";
+
+    /* block comment
+       spanning multiple lines */
+    ratio: 1.5;
+    visible := (a == b) && (c != d) || !e;
+}

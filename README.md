@@ -70,6 +70,8 @@ Folio documents render live to a window for preview/editing, and export to:
 
 ## Architecture
 
+For a full deep-dive into the architecture of Folio, read [`ARCHITECTURE.md`](ARCHITECTURE.md)
+
 ```
 .folio source
    │  lexer
