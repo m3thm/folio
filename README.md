@@ -14,7 +14,7 @@ Folio source files use the `.folio` extension.
 
 ## What Folio can express currently
 
-This is the scope of the current grammar — see [`docs/grammar.md`](docs/grammar.md)
+This is the scope of the current grammar — see [`LANGUAGE-SPEC.md`](LANGUAGE-SPEC.md)
 for the full EBNF specification.
 
 - **Page setup** — page size (presets like `A4`/`Letter` or custom

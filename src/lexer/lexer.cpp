@@ -1,7 +1,9 @@
 #include "lexer/lexer.hpp"
+#include "diagnostics/diagnostics.hpp"
 
 namespace folio {
-    Lexer::Lexer(std::string source) : source(std::move(source)) {}
+    Lexer::Lexer(std::string source, DiagnosticsEngine& engine)
+        : source(std::move(source)), engine(engine) {}
 
     char Lexer::peek(std::size_t offset) const
     {
@@ -12,15 +14,7 @@ namespace folio {
 
     char Lexer::advance()
     {
-        char c = source[position++];
-        if (c == '\n') {
-            line++;
-            column = 1;
-        }
-        else {
-            column++;
-        }
-        return c;
+        return source[position++];
     }
 
     bool Lexer::isAtEnd() const
@@ -56,37 +50,37 @@ namespace folio {
         }
     }
 
-    Token Lexer::makeToken(TokenKind kind, std::string text, std::size_t startLine, std::size_t startCol)
+    Token Lexer::makeToken(TokenKind kind, std::string text, std::size_t start, std::size_t end)
     {
-        return Token{ kind, std::move(text), startLine, startCol };
+        return Token{ kind, std::move(text), SourceSpan{start, end} };
     }
 
     Token Lexer::isNumber()
     {
-        std::size_t startLine = line, startCol = column;
+        std::size_t start = position;
         std::string text;
         while (std::isdigit(static_cast<unsigned char>(peek()))) text += advance();
         if (peek() == '.' && std::isdigit(static_cast<unsigned char>(peek(1)))) {
             text += advance(); // consume '.'
             while (std::isdigit(static_cast<unsigned char>(peek()))) text += advance();
         }
-        return makeToken(TokenKind::Number, text, startLine, startCol);
+        return makeToken(TokenKind::Number, text, start, position);
     }
 
     Token Lexer::isIdentOrKeyword()
     {
-        std::size_t startLine = line, startCol = column;
+        std::size_t start = position;
         std::string text;
         while (std::isalnum(static_cast<unsigned char>(peek())) || peek() == '_') text += advance();
         // keywords (page, rect, fill, etc.) are NOT special-cased here.
         // The parser recognizes them by comparing Ident text. this keeps the
         // lexer dumb and the keyword list easy to extend later.
-        return makeToken(TokenKind::Ident, text, startLine, startCol);
+        return makeToken(TokenKind::Ident, text, start, position);
     }
 
     Token Lexer::isString()
     {
-        std::size_t startLine = line, startCol = column;
+        std::size_t start = position;
         std::string text;
         advance(); // consume opening quote
         while (!isAtEnd() && peek() != '"') {
@@ -106,18 +100,16 @@ namespace folio {
             }
         }
         if (isAtEnd()) {
-            // Hit end-of-input before a closing quote was found. This is a
-            // lexical error, not a valid (if oddly-terminated) string — flag
-            // it so the parser doesn't mistake it for well-formed input.
-            return makeToken(TokenKind::Invalid, text, startLine, startCol);
+            engine.error(SourceSpan{ start, position }, "unterminated string literal");
+            return makeToken(TokenKind::Invalid, text, start, position);
         }
         advance(); // consume closing quote
-        return makeToken(TokenKind::String, text, startLine, startCol);
+        return makeToken(TokenKind::String, text, start, position);
     }
 
     Token Lexer::isHexColor()
     {
-        std::size_t startLine = line, startCol = column;
+        std::size_t start = position;
         std::string text;
         text += advance(); // consume '#'
         while (std::isxdigit(static_cast<unsigned char>(peek()))) text += advance();
@@ -126,9 +118,10 @@ namespace folio {
         // long, or a digit count that isn't 6 or 8) is lexically invalid.
         std::size_t digitCount = text.size() - 1; // exclude the leading '#'
         if (digitCount != 6 && digitCount != 8) {
-            return makeToken(TokenKind::Invalid, text, startLine, startCol);
+            engine.error(SourceSpan{ start, position }, "hex color must have exactly 6 or 8 digits");
+            return makeToken(TokenKind::Invalid, text, start, position);
         }
-        return makeToken(TokenKind::HexColor, text, startLine, startCol);
+        return makeToken(TokenKind::HexColor, text, start, position);
     }
 
     std::vector<Token> Lexer::tokenize()
@@ -139,7 +132,7 @@ namespace folio {
             skipWhitespaceAndComments();
             if (isAtEnd()) break;
 
-            std::size_t startLine = line, startCol = column;
+            std::size_t start = position;
             char c = peek();
 
             if (std::isdigit(static_cast<unsigned char>(c))) {
@@ -161,63 +154,71 @@ namespace folio {
 
             advance(); // consume the punctuation/operator char
             switch (c) {
-            case '{': tokens.push_back(makeToken(TokenKind::LBrace, "{", startLine, startCol)); break;
-            case '}': tokens.push_back(makeToken(TokenKind::RBrace, "}", startLine, startCol)); break;
-            case '(': tokens.push_back(makeToken(TokenKind::LParen, "(", startLine, startCol)); break;
-            case ')': tokens.push_back(makeToken(TokenKind::RParen, ")", startLine, startCol)); break;
-            case '[': tokens.push_back(makeToken(TokenKind::LBracket, "[", startLine, startCol)); break;
-            case ']': tokens.push_back(makeToken(TokenKind::RBracket, "]", startLine, startCol)); break;
-            case ':': tokens.push_back(makeToken(TokenKind::Colon, ":", startLine, startCol)); break;
-            case ',': tokens.push_back(makeToken(TokenKind::Comma, ",", startLine, startCol)); break;
-            case '.': tokens.push_back(makeToken(TokenKind::Dot, ".", startLine, startCol)); break;
-            case ';': tokens.push_back(makeToken(TokenKind::Semicolon, ";", startLine, startCol)); break;
-            case '+': tokens.push_back(makeToken(TokenKind::Plus, "+", startLine, startCol)); break;
-            case '*': tokens.push_back(makeToken(TokenKind::Star, "*", startLine, startCol)); break;
-            case '/': tokens.push_back(makeToken(TokenKind::Slash, "/", startLine, startCol)); break;
-            case '%': tokens.push_back(makeToken(TokenKind::Percent, "%", startLine, startCol)); break;
-            case '?': tokens.push_back(makeToken(TokenKind::Question, "?", startLine, startCol)); break;
-            case '!':
-                tokens.push_back(match('=')
-                    ? makeToken(TokenKind::NotEq, "!=", startLine, startCol)
-                    : makeToken(TokenKind::Bang, "!", startLine, startCol));
-                break;
-            case '=':
-                if (match('=')) tokens.push_back(makeToken(TokenKind::EqEq, "==", startLine, startCol));
-                else if (match('>')) tokens.push_back(makeToken(TokenKind::FatArrow, "=>", startLine, startCol));
-                else tokens.push_back(makeToken(TokenKind::Eq, "=", startLine, startCol));
-                break;
-            case '<':
-                tokens.push_back(match('=')
-                    ? makeToken(TokenKind::Le, "<=", startLine, startCol)
-                    : makeToken(TokenKind::Lt, "<", startLine, startCol));
-                break;
-            case '>':
-                tokens.push_back(match('=')
-                    ? makeToken(TokenKind::Ge, ">=", startLine, startCol)
-                    : makeToken(TokenKind::Gt, ">", startLine, startCol));
-                break;
-            case '-':
-                tokens.push_back(match('>')
-                    ? makeToken(TokenKind::ThinArrow, "->", startLine, startCol)
-                    : makeToken(TokenKind::Minus, "-", startLine, startCol));
-                break;
-            case '&':
-                tokens.push_back(match('&')
-                    ? makeToken(TokenKind::AndAnd, "&&", startLine, startCol)
-                    : makeToken(TokenKind::Invalid, "&", startLine, startCol));
-                break;
-            case '|':
-                tokens.push_back(match('|')
-                    ? makeToken(TokenKind::OrOr, "||", startLine, startCol)
-                    : makeToken(TokenKind::Invalid, "|", startLine, startCol));
-                break;
-            default:
-                tokens.push_back(makeToken(TokenKind::Invalid, std::string(1, c), startLine, startCol));
-                break;
+                case '{': tokens.push_back(makeToken(TokenKind::LBrace, "{", start, position)); break;
+                case '}': tokens.push_back(makeToken(TokenKind::RBrace, "}", start, position)); break;
+                case '(': tokens.push_back(makeToken(TokenKind::LParen, "(", start, position)); break;
+                case ')': tokens.push_back(makeToken(TokenKind::RParen, ")", start, position)); break;
+                case '[': tokens.push_back(makeToken(TokenKind::LBracket, "[", start, position)); break;
+                case ']': tokens.push_back(makeToken(TokenKind::RBracket, "]", start, position)); break;
+                case ':': tokens.push_back(makeToken(TokenKind::Colon, ":", start, position)); break;
+                case ',': tokens.push_back(makeToken(TokenKind::Comma, ",", start, position)); break;
+                case '.': tokens.push_back(makeToken(TokenKind::Dot, ".", start, position)); break;
+                case ';': tokens.push_back(makeToken(TokenKind::Semicolon, ";", start, position)); break;
+                case '+': tokens.push_back(makeToken(TokenKind::Plus, "+", start, position)); break;
+                case '*': tokens.push_back(makeToken(TokenKind::Star, "*", start, position)); break;
+                case '/': tokens.push_back(makeToken(TokenKind::Slash, "/", start, position)); break;
+                case '%': tokens.push_back(makeToken(TokenKind::Percent, "%", start, position)); break;
+                case '?': tokens.push_back(makeToken(TokenKind::Question, "?", start, position)); break;
+                
+                case '!':
+                    tokens.push_back(match('=')
+                        ? makeToken(TokenKind::NotEq, "!=", start, position)
+                        : makeToken(TokenKind::Bang, "!", start, position));
+                    break;
+                case '=':
+                    if (match('=')) tokens.push_back(makeToken(TokenKind::EqEq, "==", start, position));
+                    else if (match('>')) tokens.push_back(makeToken(TokenKind::FatArrow, "=>", start, position));
+                    else tokens.push_back(makeToken(TokenKind::Eq, "=", start, position));
+                    break;
+                case '<':
+                    tokens.push_back(match('=')
+                        ? makeToken(TokenKind::Le, "<=", start, position)
+                        : makeToken(TokenKind::Lt, "<", start, position));
+                    break;
+                case '>':
+                    tokens.push_back(match('=')
+                        ? makeToken(TokenKind::Ge, ">=", start, position)
+                        : makeToken(TokenKind::Gt, ">", start, position));
+                    break;
+                case '-':
+                    tokens.push_back(match('>')
+                        ? makeToken(TokenKind::ThinArrow, "->", start, position)
+                        : makeToken(TokenKind::Minus, "-", start, position));
+                    break;
+                case '&':
+                    if (match('&')) {
+                        tokens.push_back(makeToken(TokenKind::AndAnd, "&&", start, position));
+                    } else {
+                        engine.error(SourceSpan{start, position}, "expected '&&', found '&'");
+                        tokens.push_back(makeToken(TokenKind::Invalid, "&", start, position));
+                    }
+                    break;
+                case '|':
+                    if (match('|')) {
+                        tokens.push_back(makeToken(TokenKind::OrOr, "||", start, position));
+                    } else {
+                        engine.error(SourceSpan{start, position}, "expected '||', found '|'");
+                        tokens.push_back(makeToken(TokenKind::Invalid, "|", start, position));
+                    }
+                    break;
+                default:
+                    engine.error(SourceSpan{start, position}, "unexpected character '" + std::string(1, c) + "'");
+                    tokens.push_back(makeToken(TokenKind::Invalid, std::string(1, c), start, position));
+                    break;
             }
         }
 
-        tokens.push_back(makeToken(TokenKind::End, "", line, column));
+        tokens.push_back(makeToken(TokenKind::End, "", position, position));
         return tokens;
     }
 }

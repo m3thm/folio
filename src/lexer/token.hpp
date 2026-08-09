@@ -2,6 +2,7 @@
 
 #include <string>
 #include <cstdint>
+#include "diagnostics/diagnostics.hpp"
 
 namespace folio {
 
@@ -32,8 +33,7 @@ namespace folio {
     struct Token {
         TokenKind kind;
         std::string lexeme;
-        std::size_t line;
-        std::size_t column;
+        SourceSpan span;
     };
 
 }
