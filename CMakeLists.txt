@@ -13,6 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_library(folio_core
     src/lexer/lexer.cpp
     src/parser/parser.cpp
+    src/parser/expr_parser.cpp
     src/diagnostics/diagnostics_engine.cpp)
 
 target_include_directories(folio_core PUBLIC

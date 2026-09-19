@@ -20,6 +20,7 @@ namespace folio {
         Colon, Comma, Dot, Semicolon,
         ThinArrow,            // ->
         FatArrow,             // =>  (unused by the grammar today; kept distinct from ThinArrow so the parser isn't blocked if/when it's needed later)
+        At,
 
         // operators
         Plus, Minus, Star, Slash, Percent,

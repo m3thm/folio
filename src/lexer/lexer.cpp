@@ -114,11 +114,11 @@ namespace folio {
         text += advance(); // consume '#'
         while (std::isxdigit(static_cast<unsigned char>(peek()))) text += advance();
 
-        // HEXCOLOR := '#' [0-9a-fA-F]{6,8} — anything else (too short, too
-        // long, or a digit count that isn't 6 or 8) is lexically invalid.
+        // HEXCOLOR := '#' ([0-9a-fA-F]{3,4} | [0-9a-fA-F]{6,8}) — 3/4 are the
+        // #RGB / #RGBA shorthand. Any other digit count is lexically invalid.
         std::size_t digitCount = text.size() - 1; // exclude the leading '#'
-        if (digitCount != 6 && digitCount != 8) {
-            engine.error(SourceSpan{ start, position }, "hex color must have exactly 6 or 8 digits");
+        if (digitCount != 3 && digitCount != 4 && digitCount != 6 && digitCount != 8) {
+            engine.error(SourceSpan{ start, position }, "hex color must have 3, 4, 6, or 8 digits");
             return makeToken(TokenKind::Invalid, text, start, position);
         }
         return makeToken(TokenKind::HexColor, text, start, position);
@@ -169,6 +169,7 @@ namespace folio {
                 case '/': tokens.push_back(makeToken(TokenKind::Slash, "/", start, position)); break;
                 case '%': tokens.push_back(makeToken(TokenKind::Percent, "%", start, position)); break;
                 case '?': tokens.push_back(makeToken(TokenKind::Question, "?", start, position)); break;
+                case '@': tokens.push_back(makeToken(TokenKind::At, "@", start, position)); break;
                 
                 case '!':
                     tokens.push_back(match('=')

@@ -14,7 +14,9 @@ IDENT       := [a-zA-Z_][a-zA-Z0-9_]*        (* excludes any KEYWORD below *)
 NUMBER      := [0-9]+ ('.' [0-9]+)?
 STRING      := '"' (any char except '"', or escaped) * '"'
 UNIT        := 'px' | 'pt' | 'mm' | 'cm' | 'in'
-HEXCOLOR    := '#' [0-9a-fA-F]{6,8}
+HEXCOLOR    := '#' ( [0-9a-fA-F]{3,4} | [0-9a-fA-F]{6} | [0-9a-fA-F]{8} )
+             (* 3/4 digits are #RGB / #RGBA shorthand: each digit is doubled,
+                so #F80 == #FF8800 and #F808 == #FF880088. *)
 
 KEYWORD     := 'true' | 'false'
              | 'self' | 'parent' | 'page'
@@ -142,7 +144,7 @@ equality_num    := compare_num   (('==' | '!=') compare_num)* ;
 compare_num     := add_num       (('<' | '>' | '<=' | '>=') add_num)* ;
 add_num         := mul_num       (('+' | '-') mul_num)* ;
 mul_num         := unary_num     (('*' | '/' | '%') unary_num)* ;
-unary_num       := '-'? primary_num ;
+unary_num       := ('-' | '!')? primary_num ;
 
 primary_num     := sized_number
                   | color_literal          (* only valid where a fill_expr/
