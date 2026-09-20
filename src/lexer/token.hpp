@@ -55,6 +55,7 @@ namespace folio {
             case TokenKind::Semicolon: return "Semicolon";
             case TokenKind::ThinArrow: return "ThinArrow";
             case TokenKind::FatArrow: return "FatArrow";
+            case TokenKind::At: return "At";
             case TokenKind::Plus: return "Plus";
             case TokenKind::Minus: return "Minus";
             case TokenKind::Star: return "Star";

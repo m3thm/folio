@@ -12,9 +12,34 @@ anything from a flat color up to a hand-written shader.
 
 Folio source files use the `.folio` extension.
 
-## What Folio can express currently
+## Project status
 
-This is the scope of the current grammar — see [`LANGUAGE-SPEC.md`](LANGUAGE-SPEC.md)
+Folio is at an early stage: the front half of the pipeline is written, and
+nothing renders or exports yet.
+
+| Component | State |
+|---|---|
+| Diagnostics engine | Done |
+| Lexer | Done |
+| AST | Done |
+| Parser | Done — accepts the full example in [`LANGUAGE-SPEC.md`](LANGUAGE-SPEC.md) section 5 with no errors |
+| `folioc` CLI | Partial — lexes and parses a file, reports diagnostics, and prints a short outline of the parsed nodes; a full AST dump needs the AST printer |
+| AST printer, semantic analysis, scene graph | Not started |
+| Shader IR, CPU interpreter, WGSL codegen | Not started |
+| SVG / PNG / PDF export | Not started |
+| Live GPU preview | Not started |
+| Tests | Not started |
+
+The rest of this README describes the language as specified and the planned
+pipeline; [`ARCHITECTURE.md`](ARCHITECTURE.md) has the module breakdown and
+build order. `examples/` has two valid documents (`hello.folio`, a minimal one, and
+`showcase.folio`, the complete example from `LANGUAGE-SPEC.md` section 5) and
+two deliberately broken inputs for testing the lexer and diagnostics
+(`lexer_smoke.folio` and `errors.folio`).
+
+## What the language covers (Phase 1)
+
+This is the scope of the Phase 1 grammar, which the parser implements — see [`LANGUAGE-SPEC.md`](LANGUAGE-SPEC.md)
 for the full EBNF specification.
 
 - **Page setup** — page size (presets like `A4`/`Letter` or custom
@@ -60,9 +85,9 @@ you're coloring a rectangle, a hexagon, or text.
 - A math module (`solve`, `plot`, equation rendering) and diagram/flowchart
   layout.
 
-## Output formats
+## Planned output formats
 
-Folio documents render live to a window for preview/editing, and export to:
+None of these exist yet. Folio documents will render live to a window for preview/editing, and export to:
 
 - **PDF** — with real embedded fonts and selectable text where possible
 - **SVG**
@@ -70,7 +95,8 @@ Folio documents render live to a window for preview/editing, and export to:
 
 ## Architecture
 
-For a full deep-dive into the architecture of Folio, read [`ARCHITECTURE.md`](ARCHITECTURE.md)
+For a full deep-dive into the architecture of Folio, read [`ARCHITECTURE.md`](ARCHITECTURE.md).
+Only the first two stages of this pipeline (lexer, parser) are implemented so far.
 
 ```
 .folio source
@@ -95,19 +121,41 @@ scene graph
 
 ## Building
 
-Requires CMake 3.25+, a C++20 compiler, and [vcpkg](https://github.com/microsoft/vcpkg)
-(`VCPKG_ROOT` environment variable set).
+Requires CMake 3.25+ and a C++20 compiler. There are currently no third-party
+dependencies (`vcpkg.json` is empty), so [vcpkg](https://github.com/microsoft/vcpkg)
+is only needed if you use the bundled Windows presets, or once dependencies are
+added (planned: freetype, harfbuzz, gtest).
 
 ```powershell
-git clone <this repo>
-cd folio-project
-# open the folder in Visual Studio (CMake presets are auto-detected), or:
+git clone https://github.com/m3thm/folio.git
+cd folio
+```
+
+**Windows** — the CMake presets (Ninja generator + vcpkg toolchain, with the
+`VCPKG_ROOT` environment variable set) are Windows-only. Open the folder in
+Visual Studio (presets are auto-detected), or:
+
+```powershell
 cmake --preset debug
+cmake --build out/build/debug
+```
+
+**Linux / macOS** — there are no presets for these platforms yet, so configure
+manually (no vcpkg needed):
+
+```bash
+cmake -S . -B out/build/debug -DCMAKE_BUILD_TYPE=Debug
 cmake --build out/build/debug
 ```
 
 Run the compiler CLI:
 
-```powershell
-./out/build/debug/folioc path/to/file.folio
 ```
+./out/build/debug/folioc examples/hello.folio
+```
+
+`folioc` lexes and parses the file. On success it prints a short outline of the
+page and its nodes and exits 0. On errors it prints diagnostics (with file,
+line, and column) to stderr and exits 1. Pass `--tokens` to also dump the token
+stream. Semantic analysis and export aren't implemented yet, so that is all it
+does for now.

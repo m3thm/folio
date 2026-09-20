@@ -59,7 +59,7 @@ namespace folio {
         return { line, col, source.substr(lineStart, lineEnd - lineStart) };
     }
 
-    void DiagnosticsEngine::printAll(std::ostream& os, std::string_view sourceText) const {
+    void DiagnosticsEngine::printAll(std::ostream& os, std::string_view sourceText, std::string_view filename) const {
         // ANSI color codes
         constexpr const char* COLOR_RED = "\033[1;31m";
         constexpr const char* COLOR_YELLOW = "\033[1;33m";
@@ -83,7 +83,7 @@ namespace folio {
             }
 
             // 1. Print file/line/col and message
-            os << BOLD << "file.src:" << info.lineNum << ":" << info.colNum << ": "
+            os << BOLD << filename << ":" << info.lineNum << ":" << info.colNum << ": "
                 << colorCode << severityStr << ": " << COLOR_RESET
                 << BOLD << diag.message << COLOR_RESET << "\n";
 

@@ -21,7 +21,8 @@ namespace folio {
         [[nodiscard]] std::span<const Diagnostic> diagnostics() const;
 
         // Terminal output
-        void printAll(std::ostream& os, std::string_view sourceText) const;
+        // `filename` is only used for display in the "file:line:col" prefix.
+        void printAll(std::ostream& os, std::string_view sourceText, std::string_view filename) const;
 
     private:
         std::vector<Diagnostic> m_diagnostics;

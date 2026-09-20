@@ -1,7 +1,28 @@
+// Deliberately malformed input for testing diagnostics.
+// Try: folioc examples/errors.folio
+//
+// The comment above each line in `rect broken` names the lexer error that
+// line should produce. Two things to know when reading the output:
+//   - The lexer runs first, so its errors are listed first. The parser then
+//     reports a follow-on error for each bad token it can't make sense of.
+//   - The unterminated string is last on purpose. A string with no closing
+//     quote runs to the end of the file, so anything after it would never be
+//     lexed. It also swallows the closing brace, which is why the parser
+//     reports one more error at the very end.
+
 page {
-    background: #FF00;
-    label: "unterminated string
-    weird := a & b;
-    other := c | d;
-    junk: 5 @ 10;
+    size: A4
+}
+
+rect broken {
+    // hex color with 5 digits (must be 3, 4, 6, or 8)
+    fill: #FF000
+    // lone '&' (only '&&' exists)
+    a = b & c;
+    // lone '|' (only '||' exists)
+    d = e | f;
+    // a character the language doesn't use
+    e = $;
+    // unterminated string literal
+    label = "no closing quote
 }

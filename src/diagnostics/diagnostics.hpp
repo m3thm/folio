@@ -1,25 +1,30 @@
 #pragma once
+#include <cstddef>
 #include <string>
 
-// Represents a contiguous range of source code using byte offsets.
-struct SourceSpan {
-    size_t start;
-    size_t end;
+namespace folio {
 
-    // Helper to get the length of the span
-    [[nodiscard]] size_t length() const {
-        return (end > start) ? (end - start) : 0;
-    }
-};
+    // Represents a contiguous range of source code using byte offsets.
+    struct SourceSpan {
+        std::size_t start;
+        std::size_t end;
 
-struct Diagnostic {
-    enum class Severity {
-        Error,
-        Warning,
-        Note
+        // Helper to get the length of the span
+        [[nodiscard]] std::size_t length() const {
+            return (end > start) ? (end - start) : 0;
+        }
     };
 
-    Severity severity;
-    SourceSpan span;
-    std::string message;
-};
+    struct Diagnostic {
+        enum class Severity {
+            Error,
+            Warning,
+            Note
+        };
+
+        Severity severity;
+        SourceSpan span;
+        std::string message;
+    };
+
+}

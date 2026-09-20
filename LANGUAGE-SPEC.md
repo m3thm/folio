@@ -1,4 +1,4 @@
-# Document Language — Phase 1 Grammar Specification
+# Folio — Phase 1 Grammar Specification
 
 Phase 1 scope: static 2D documents. Declarative only — no time, no animation,
 no reactive dependency graph. Every node has a `fill`, and every `fill` is,
@@ -21,8 +21,8 @@ HEXCOLOR    := '#' ( [0-9a-fA-F]{3,4} | [0-9a-fA-F]{6} | [0-9a-fA-F]{8} )
 KEYWORD     := 'true' | 'false'
              | 'self' | 'parent' | 'page'
              | 'at'
-             (* KEYWORD tokens are reserved: they can never be lexed as IDENT,
-                so a node/variable named e.g. `self` or `true` is a lex error,
+             (* KEYWORD words are reserved: they can never be used as an IDENT,
+                so a node/variable named e.g. `self` or `true` is an error,
                 not an ambiguity resolved later. *)
 
 PUNCT       := '{' '}' '(' ')' '[' ']' ':' ',' '.' ';' '->' '=>'
@@ -32,7 +32,7 @@ OPERATOR    := '+' '-' '*' '/' '%' '<' '>' '<=' '>=' '=' '==' '!='
                 position, not by the lexer: immediately suffixing a NUMBER
                 with no space in a `dimension` context it means "percent";
                 elsewhere (e.g. inside a shader_expr) it's the modulo
-                operator. See §4.1.
+                operator. See section 4.1.
                 '=' (assignment, used only by `statement`) is likewise its
                 own lexeme, distinct from '==' and '=>' — a single '=' is
                 not itself an `expr` operator. *)
@@ -42,6 +42,13 @@ COMMENT     := '//' (any char except newline)*
 
 WHITESPACE  := (' ' | '\t' | '\n' | '\r')+   // not significant, discarded
 ```
+
+> **Implementation note.** The definitions above describe the language, not
+> the lexer's token kinds. The current lexer has no separate KEYWORD or UNIT
+> tokens: both arrive as plain `Ident` tokens (a unit suffix as an `Ident`
+> right after its `Number`), and the parser recognizes them by context. The
+> reserved-word rule above is enforced by the parser, which reports an error
+> when a reserved word is used as a node or variable name.
 
 ---
 
@@ -65,7 +72,7 @@ preset_size     := 'A4' | 'A3' | 'A5' | 'Letter' | 'Legal' | 'Tabloid' ;
 
 dimension       := NUMBER UNIT? ;                  (* default unit: pt; no % here —
                                                         page_prop values (size, margin)
-                                                        are always absolute, see §4.1 *)
+                                                        are always absolute, see section 4.1 *)
 
 bool_literal    := 'true' | 'false' ;
 
@@ -161,7 +168,7 @@ sized_number    := NUMBER (UNIT | '%')? ;
                      z, and as an operand in arithmetic. NUMBER with UNIT is
                      an absolute dimension. NUMBER with '%' is a percentage,
                      legal only for x/y/width/height/radius/font_size — see
-                     §4.1 for what it's a percentage OF. Mixing a UNIT/percent
+                     section 4.1 for what it's a percentage OF. Mixing a UNIT/percent
                      value with a bare scalar via + or - across incompatible
                      kinds (e.g. `50% + 3` outside of width/height context)
                      is a semantic-analysis error, not a parse error. *)
@@ -188,7 +195,7 @@ reference       := ('self' | 'parent' | 'page' | IDENT) '.' IDENT ;
                                        document order that isn't yet
                                        resolved, is a semantic-analysis
                                        error (no forward/cyclic references —
-                                       see §4.2). *)
+                                       see section 4.2). *)
 ```
 
 `<prop>` after a `.` is restricted to the resolved numeric properties of a
@@ -388,7 +395,7 @@ Where **resolution basis** is:
 Percentages never resolve against the node's *own* prior value (no
 self-referential `%`, which is why `page_prop` values like `margin` and
 `size` — resolved before any node exists — reject `%` outright at the
-grammar level; see the `dimension` rule in §2).
+grammar level; see the `dimension` rule in section 2).
 
 Resolution proceeds top-down: a group's own `width`/`height` must be fully
 resolved (to an absolute unit) before its children's percentages can be
@@ -396,11 +403,11 @@ computed. A group whose own `width`/`height` is *itself* a percentage is
 resolved against its own basis first, recursively, up to the page content
 box, which is always absolute. This gives a strict top-down dependency
 order with no cycles possible through nesting alone (cycles are still
-possible through `reference` expressions — see §4.2).
+possible through `reference` expressions — see section 4.2).
 
 ### 4.2 Reference resolution
 
-`self.`, `parent.`, `page.`, and `IDENT.` references (§2.1) are resolved in
+`self.`, `parent.`, `page.`, and `IDENT.` references (section 2.1) are resolved in
 the same pass, after percentages, using each node's already-resolved
 absolute values:
 
@@ -417,7 +424,7 @@ absolute values:
   a sibling declared later in the file. Only the acyclicity check in the
   bullet above governs validity, not source position. (This differs from
   `statement` locals inside a single node body, which *are* strictly
-  ordered — see the note under `statement` in §2.)
+  ordered — see the note under `statement` in section 2.)
 - `self.<prop>` may reference a property resolved earlier in the same
   node's evaluation (e.g. `height: self.width * 0.5` is valid because
   `width` is evaluated first per the property's position in `common_prop`
@@ -507,7 +514,7 @@ group footer {
 ## 6. Compiler pipeline for this grammar
 
 ```
-source.lang
+source.folio
    │  lexer
    ▼
 tokens
@@ -516,18 +523,18 @@ tokens
 AST  (page_decl, node_decl*, nested fill_expr / shader_expr trees)
    │  semantic pass: type check, resolve imports, resolve % / unit dimensions,
    │  resolve self./parent./page./IDENT. references (topological order,
-   │  cycle detection per §4.2)
+   │  cycle detection per section 4.2)
    ▼
-Scene Graph  (concrete Nodes: Rect, Circle, Text, Image, Group,
+Scene Graph  (concrete Nodes: Rect, Circle, Ellipse, Path, Text, Image, Group,
               each holding a resolved FillDescriptor)
    │
    ├─► FillDescriptor classification:
    │      solid / gradient / texture → native fill data (color, stops, image)
-   │      shader { ... }             → shader_expr subtree kept as-is
+   │      shader { ... }             → shader_expr type-checked into a typed shader IR
    │
    ├─► Screen renderer:
    │      solid/gradient/texture → fast-path GPU fill
-   │      shader block           → shader_expr compiled to WGSL → naga → native shader
+   │      shader block           → shader IR compiled to WGSL → native shader (via wgpu-native)
    │
    └─► Exporters:
           PDF: text nodes → native text objects + embedded font (selectable)

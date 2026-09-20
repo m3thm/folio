@@ -1,12 +1,31 @@
-// A small example page
+// A minimal Folio document: a page, a gradient banner, a title, and a badge.
 page {
-    size: [612, 792];
-    background: #FFAA00;
+  size: A4
+  background: #F5F5FA
+}
 
-    rect(0, 0) -> fill: "red";
+rect banner {
+  x: 0
+  y: 0
+  width: 100%
+  height: 120pt
+  fill: linear_gradient(90, #1E1E3C @ 0, #3C1E5A @ 1)
+}
 
-    /* block comment
-       spanning multiple lines */
-    ratio: 1.5;
-    visible := (a == b) && (c != d) || !e;
+text title {
+  x: 40pt
+  y: 40pt
+  content: "Hello, Folio"
+  font: "Inter"
+  font_size: 32
+  font_weight: bold
+  fill: #FFFFFF
+}
+
+circle badge {
+  x: 40pt
+  y: 200pt
+  radius: 30pt
+  fill: #FFD700
+  stroke: { color: #000000, width: 2pt }
 }

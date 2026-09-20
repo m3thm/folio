@@ -5,6 +5,15 @@ what each owns, how data flows between them, and — most importantly — how
 to sequence the work so you have a usable tool (exporting real files) long
 before the GPU live-preview renderer is finished.
 
+**Status.** Steps 1-3 of section 8 are mostly done: the diagnostics engine,
+lexer, AST, and parser exist, `folioc` runs the lexer and parser on a file,
+and the parser accepts the full example in `LANGUAGE-SPEC.md` section 5 with
+no diagnostics. Not done yet: there is no `ast_printer` (`folioc` prints only
+a short outline of the parsed nodes), and there are no tests. Everything from
+sema onward is design only. Modules and files below are tagged *(implemented)*
+or *(planned)*; where the code differs from the original sketch, this document
+describes the code.
+
 ---
 
 ## 1. Guiding principles
@@ -31,62 +40,62 @@ A few decisions shape everything below:
    IR **two independent backends** — a naive CPU interpreter (pixel loop in
    plain C++, used by the exporters and by unit tests) and a WGSL codegen
    backend (used by the live renderer). This is the single most important
-   structural decision in this doc — see §7.
+   structural decision in this doc — see the `shader/` module in section 3.
 4. **Diagnostics are a shared service, not a per-module afterthought.**
-   Lexer, parser, and every sema pass report through one `DiagnosticEngine`
+   Lexer, parser, and every sema pass report through one `DiagnosticsEngine`
    so error output is consistent and testable from the start, instead of
    retrofitted later.
 5. **AST nodes are closed, finite, and known up front** (the grammar says
    so explicitly). That means `std::variant` + `std::visit` is a better fit
    than a classic polymorphic class hierarchy with virtual dispatch — no
    vtables, exhaustiveness-checked visitors, and it matches how compact the
-   grammar actually is. Details in §4.
+   grammar actually is. Details in section 4.
 
 ---
 
 ## 2. Top-level directory structure
 
 ```
-folio-project/
+folio/
 ├── CMakeLists.txt
-├── CMakePresets.json
-├── vcpkg.json
-├── docs/
-│   ├── language-spec-phase1.md
-│   └── ARCHITECTURE.md              (this file)
+├── CMakePresets.json                 Windows-only presets (Ninja + vcpkg toolchain)
+├── vcpkg.json                        no dependencies yet
+├── README.md
+├── ARCHITECTURE.md                   (this file)
+├── LANGUAGE-SPEC.md                  Phase 1 grammar spec
 ├── src/
-│   ├── main.cpp
+│   ├── main.cpp                      folioc CLI: lex, parse, report, print a short outline
 │   ├── diagnostics/
-│   │   ├── diagnostic.hpp            Diagnostic, Severity, SourceSpan
-│   │   └── diagnostic_engine.hpp/.cpp
+│   │   ├── diagnostics.hpp           Diagnostic, Severity, SourceSpan
+│   │   └── diagnostics_engine.hpp/.cpp
 │   ├── lexer/
-│   │   ├── token.hpp                 (moved here from src/ — see §3)
+│   │   ├── token.hpp
 │   │   ├── lexer.hpp
 │   │   └── lexer.cpp
 │   ├── ast/
-│   │   ├── ast.hpp                   Document/Page/Node/Expr/Fill/Shader trees
-│   │   └── ast_printer.hpp/.cpp      debug dump, drives parser golden tests
+│   │   ├── ast.hpp                   Expr/Fill/Stroke/NodeDecl/PageDecl/Document
+│   │   └── ast_printer.hpp/.cpp      (planned) debug dump, drives parser golden tests
 │   ├── parser/
 │   │   ├── parser.hpp/.cpp           top-level recursive descent
 │   │   └── expr_parser.hpp/.cpp      shared precedence-climbing parser
-│   ├── sema/
+│   ├── sema/                         (planned)
 │   │   ├── symbol_table.hpp/.cpp     node-name scoping for references
-│   │   ├── dimension_resolver.hpp/.cpp   % / unit resolution (spec §4.1)
-│   │   ├── reference_resolver.hpp/.cpp   dependency graph + cycles (§4.2)
+│   │   ├── dimension_resolver.hpp/.cpp   % / unit resolution (spec section 4.1)
+│   │   ├── reference_resolver.hpp/.cpp   dependency graph + cycles (section 4.2)
 │   │   ├── shader_typecheck.hpp/.cpp     shader_expr type checking
 │   │   └── scene_builder.hpp/.cpp        AST + resolved values → scene graph
-│   ├── scene/
+│   ├── scene/                        (planned)
 │   │   └── scene_graph.hpp           Rect/Circle/Ellipse/Path/Text/Image/Group,
 │   │                                 FillDescriptor
-│   ├── shader/
+│   ├── shader/                       (planned)
 │   │   ├── shader_ir.hpp             typed IR, post-typecheck
 │   │   ├── cpu_interpreter.hpp/.cpp  IR → per-pixel evaluator (for export)
 │   │   └── wgsl_codegen.hpp/.cpp     IR → WGSL text (for live preview)
-│   ├── render/
+│   ├── render/                       (planned)
 │   │   ├── gpu_context.hpp/.cpp      device/surface abstraction
 │   │   ├── scene_renderer.hpp/.cpp   scene graph → draw calls
 │   │   └── window.hpp/.cpp           windowing + live preview loop
-│   └── export/
+│   └── export/                       (planned)
 │       ├── exporter.hpp              common Exporter interface
 │       ├── raster_baker.hpp/.cpp     shared: shader fill → RGBA image
 │       ├── pdf/
@@ -97,7 +106,7 @@ folio-project/
 │       │   └── svg_exporter.hpp/.cpp
 │       └── png/
 │           └── png_exporter.hpp/.cpp
-├── tests/
+├── tests/                            (planned)
 │   ├── lexer_tests.cpp
 │   ├── parser_tests.cpp
 │   ├── sema_tests.cpp
@@ -107,10 +116,17 @@ folio-project/
 │       ├── *.folio                   sample sources
 │       └── *.expected.{svg,txt}      checked-in expected output
 └── examples/
-    └── *.folio                       hand-written showcase documents
+    ├── hello.folio                   minimal valid document
+    ├── showcase.folio                the complete example from LANGUAGE-SPEC.md section 5
+    ├── lexer_smoke.folio             token edge cases; not a valid document
+    └── errors.folio                  deliberately malformed input for diagnostics
 ```
 
-`token.hpp` moves under `lexer/` — it's lexer output vocabulary, and
+Anything under a directory marked *(planned)* doesn't exist yet.
+`examples/showcase.folio` is the spec's complete example kept verbatim, so if
+that example changes in `LANGUAGE-SPEC.md`, update the file too.
+
+`token.hpp` lives under `lexer/` — it's lexer output vocabulary, and
 nothing outside the lexer/parser boundary should need it directly (the AST
 carries its own `SourceSpan`, copied out of tokens once, so downstream code
 never holds a `Token`).
@@ -119,12 +135,12 @@ never holds a `Token`).
 
 ## 3. Module breakdown
 
-### `diagnostics/`
+### `diagnostics/` *(implemented)*
 
 Everything after this point — parser, every sema pass, eventually the
 exporters when a font is missing or an image fails to load — needs to
-report an error at a source location without immediately halting. Build
-this now, once:
+report an error at a source location without immediately halting. This is
+built once and shared:
 
 ```cpp
 struct Diagnostic {
@@ -134,98 +150,156 @@ struct Diagnostic {
     std::string message;
 };
 
-class DiagnosticEngine {
+class DiagnosticsEngine {
 public:
     void report(Diagnostic::Severity, SourceSpan, std::string message);
-    bool hasErrors() const;
-    std::span<const Diagnostic> diagnostics() const;
-    void printAll(std::ostream&, std::string_view sourceText) const;
+    void error(SourceSpan, std::string message);     // shorthands for report()
+    void warning(SourceSpan, std::string message);
+    void note(SourceSpan, std::string message);
+
+    [[nodiscard]] bool hasErrors() const;
+    [[nodiscard]] std::span<const Diagnostic> diagnostics() const;
+    void printAll(std::ostream&, std::string_view sourceText,
+                  std::string_view filename) const;   // filename is display-only
 };
 ```
 
-Pass a `DiagnosticEngine&` into the lexer, parser, and every sema pass
+`Diagnostic` and `SourceSpan` (byte offsets) are both defined in
+`diagnostics.hpp`, inside `namespace folio`. Pass a `DiagnosticsEngine&` into the lexer, parser, and every sema pass
 rather than having each throw exceptions or return `optional`. This lets
 the parser recover from one bad node and keep parsing (report-and-continue
 error recovery), which matters a lot for a language people will hand-edit.
 
-### `ast/`
+### `lexer/` *(implemented)*
+
+`Lexer(std::string source, DiagnosticsEngine&)`; `tokenize()` returns a
+`std::vector<Token>` ending in a `TokenKind::End` token. A `Token` is
+`{ kind, lexeme, span }`.
+
+The lexer is deliberately dumb about words. Keywords (`page`, `rect`, `fill`,
+`true`, `self`, ...) and units (`px`, `pt`, ...) are *not* separate token
+kinds: they come out as plain `Ident` tokens (a unit suffix arrives as an
+`Ident` right after its `Number`), and the parser recognizes them by context.
+That keeps the keyword list easy to extend. The reserved words from spec section 1
+(`true`, `false`, `self`, `parent`, `page`, `at`) are enforced by the parser,
+which reports an error if one is used as a node or variable name.
+
+Lexical errors reported through the engine: an unterminated string literal, a
+hex color whose digit count isn't 3, 4, 6, or 8, a lone `&` or `|` (the
+grammar only has `&&` and `||`), and any other unexpected character.
+
+### `ast/` *(implemented)*
 
 The AST is the direct, structural translation of the EBNF in
-`language-spec-phase1.md` — nothing resolved yet, no computed values, just
-"what did the person write." One header, `ast.hpp`, is enough for phase 1;
-it's not that big a grammar.
+`LANGUAGE-SPEC.md` — nothing resolved yet, no computed values, just "what did
+the person write." One header, `ast.hpp`, holds all of it, and it doesn't
+depend on the lexer (spans are copied out of tokens once).
 
-Represent `Expr` as a closed variant, matching the grammar's own closed set
-of forms:
+`Expr` is a small struct wrapping a closed variant plus the source span shared
+by every alternative:
 
 ```cpp
-struct NumberLit  { double value; std::optional<std::string> unit; SourceSpan span; };
-struct ColorLit   { /* hex or rgb()/rgba()/hsl() args */ SourceSpan span; };
-struct Reference  { std::string base; std::string prop; SourceSpan span; }; // self.width, badge.x
-struct VarRef     { std::string name; SourceSpan span; };                  // local `statement` var
-struct BinaryOp   { char op; Box<Expr> lhs, rhs; SourceSpan span; };
-struct UnaryOp    { char op; Box<Expr> operand; SourceSpan span; };
-struct Ternary    { Box<Expr> cond, then, else_; SourceSpan span; };
+struct NumberExpr     { double value; Unit unit; };            // Unit::None = bare scalar, Unit::Percent for `%`
+struct BoolExpr       { bool value; };
+struct StringExpr     { std::string value; };
+struct ColorExpr      { std::string hex; };                    // 6 or 8 hex digits; #RGB/#RGBA already expanded
+struct IdentifierExpr { std::string name; };                   // statement-local var / shader local
+struct MemberRefExpr  { RefBase base; std::string baseName;    // self.width, badge.x
+                        std::string property; };
+struct SwizzleExpr    { Box<Expr> base; std::string components; };  // shader_expr only
+struct UnaryExpr      { UnaryOp op; Box<Expr> operand; };
+struct BinaryExpr     { BinaryOp op; Box<Expr> left, right; };
+struct TernaryExpr    { Box<Expr> condition, thenBranch, elseBranch; };
+struct CallExpr       { std::string callee; std::vector<Expr> args; };  // rgb()/rgba()/hsl(), vec2/3/4(), shader builtins
 
-using Expr = std::variant<NumberLit, ColorLit, Reference, VarRef,
-                           BinaryOp, UnaryOp, Ternary>;
+struct Expr {
+    using Node = std::variant<NumberExpr, BoolExpr, StringExpr, ColorExpr, IdentifierExpr,
+                              MemberRefExpr, SwizzleExpr, UnaryExpr, BinaryExpr,
+                              TernaryExpr, CallExpr>;
+    Node node;
+    SourceSpan span;
+};
 ```
 
-(`Box<T>` here is just a small `std::unique_ptr<T>` wrapper so a variant
-can hold recursive members — `std::variant` can't directly contain itself.)
+`Box<T>` is a small move-only `std::unique_ptr` wrapper defined in `ast.hpp`
+so a variant can hold recursive members. `static_assert`s at the bottom of the
+header keep `Expr`, `Fill`, and `NodeDecl` nothrow-move-constructible, so
+`std::vector` reallocation never silently falls back to copying.
 
-Do the same for `ShaderExpr` (its own closed variant — number, color,
-vec-constructor, ident, builtin call, binary/unary/ternary/swizzle) and for
-`FillExpr` (`SolidFill | GradientFill | TextureFill | ShaderFill`).
-`NodeDecl`, `PageDecl`, and `Document` can be plain structs with
-`std::vector<NodeDecl>` children — that part of the tree isn't a closed
-value type in the same sense, it's genuinely just a list.
+How the rest of the tree is shaped:
 
-Write `ast_printer.hpp/.cpp` (a `std::visit`-based pretty-printer that
-dumps the tree back to a canonical text form) as part of this module, not
-as an afterthought — it's what your first parser tests will diff against.
+- `expr` and `shader_expr` share the single `Expr` type. Only the shader
+  grammar produces `SwizzleExpr`, and `rgb()`/`hsl()`/`vecN()`/builtins are all
+  `CallExpr`; validating callees and swizzles is sema's job
+  (`shader_typecheck`).
+- Fills are `Fill`, a struct wrapping
+  `variant<SolidFill, LinearGradientFill, RadialGradientFill, TextureFill, ShaderFill>`
+  plus a span (gradients are split by kind). A `ShaderFill` holds a
+  `std::vector<Statement>` and an `std::optional<Expr> returnExpr`.
+- `Statement { name, optional<string> type, Expr value, span }` is shared by
+  node-body statements (no type) and shader statements (`IDENT ':' type '=' ...`).
+- `NodeDecl` is a plain struct — that part of the tree isn't a closed value
+  type, it's genuinely just a list: `type`, optional `name`, `CommonProps`,
+  one optional per-type struct (`CircleProps`, `TextProps`, `ImageProps`,
+  `PathProps`; only the one matching `type` is set), `children`, and
+  `statements`. `PageDecl` and `Document { PageDecl page; std::vector<NodeDecl> nodes; }`
+  are plain structs too.
 
-### `parser/`
+Write `ast_printer.hpp/.cpp` *(planned, not written yet)* — a `std::visit`-based
+pretty-printer that dumps the tree back to a canonical text form — as part of
+this module, not as an afterthought. It's what your first parser tests will
+diff against.
 
-Split into two files because the grammar itself splits cleanly:
+### `parser/` *(implemented)*
 
-- **`parser.hpp/.cpp`** — the structural, recursive-descent part:
-  `parseDocument`, `parsePage`, `parseNode`, `parseNodeBody`,
-  `parseFillExpr`, `parseStrokeExpr`, `parsePointList`. Each function maps
-  ~1:1 to a production in §2 of the spec — that direct correspondence is
-  worth preserving even when it means a few small functions, because it's
-  what makes the parser reviewable against the grammar doc.
+`Parser(std::vector<Token>, DiagnosticsEngine&)` with `Document parse()`; the
+parser holds the token vector and an index. Split into two files because the
+grammar itself splits cleanly:
 
-- **`expr_parser.hpp/.cpp`** — a single **precedence-climbing** parser
-  shared by both `expr` (spec §2.1) and `shader_expr` (spec §3.1). Look at
-  the two grammars side by side: they're the same six-level precedence
-  chain (ternary → || → && → equality → compare → add → mul → unary) with
-  only the `primary` production differing. Don't hand-write six recursive
-  functions twice. Instead write one generic climber parameterized by a
-  small policy struct:
+- **`parser.hpp/.cpp`** — the structural, recursive-descent part: `parse`
+  (the `document` production), `parsePageDecl`, `parseNodeDecl`,
+  `parseNodeBody`, `parseFillExpr`, `parseStrokeExpr`, `parsePointList`, and
+  the smaller productions under them, plus the token-stream primitives
+  (`peek`, `advance`, `match`, `expect`, ...). Each function maps ~1:1 to a
+  production in section 2 of the spec — that direct correspondence is worth
+  preserving even when it means a few small functions, because it's what makes
+  the parser reviewable against the grammar doc.
+
+- **`expr_parser.hpp/.cpp`** — a single **precedence-climbing** parser shared
+  by both `expr` (spec section 2.1) and `shader_expr` (spec section 3.1). The two grammars
+  have the same precedence chain (ternary, `||`, `&&`, equality, comparison,
+  additive, multiplicative, then unary) and differ only in what an operand is,
+  so the chain is written once and each grammar supplies its operand parser
+  through a small policy struct:
 
   ```cpp
   struct ExprPolicy {
-      // parses a `primary_num` / `primary_expr` respectively — the only
-      // point where the two grammars actually diverge
-      std::function<Expr(Parser&)> parsePrimary;
+      // primary_num for `expr`; postfix_expr (primary_expr + swizzles) for
+      // `shader_expr` — the only point where the two grammars diverge
+      std::function<Expr(Parser&)> parseOperand;
   };
 
-  Expr parseExprPrecedence(Parser&, const ExprPolicy&, int minPrecedence = 0);
+  Expr parseExprPrecedence(Parser&, const ExprPolicy&,
+                           int minPrecedence = static_cast<int>(Precedence::Ternary));
   ```
 
-  This also means when the grammar's arithmetic layer changes (it will —
-  phase 2's math module is exactly the kind of thing that touches this),
-  you fix it once.
+  `Precedence` is an enum from `Ternary` (0) up to `Multiplicative` (6), and
+  every binary level is left-associative. The `Parser` owns two policies,
+  `exprPolicy` and `shaderPolicy`. When the grammar's arithmetic layer changes
+  (phase 2's math module is exactly the kind of thing that touches this), you
+  fix it once.
 
-- **Error recovery**: on a parse error inside a `node_body`, report the
-  diagnostic and skip tokens until the next `}` or a recognized property
-  keyword at the current brace depth, rather than aborting the whole parse.
-  A `.folio` file with one bad node should still parse the other nine.
+- **Error recovery**: after reporting a diagnostic the parser calls
+  `synchronize()`, which always consumes at least one token (so it can never
+  loop) and then skips ahead until just after a `;`, just before a `}`, or
+  just before an identifier followed by `:` or `=` (which looks like the start
+  of the next property or statement). It does not track brace depth: it stops
+  at the first `}` it sees. The goal is that a `.folio` file with one bad node
+  should still parse the other nine.
 
-### `sema/`
+### `sema/` *(planned)*
 
-This is the module doing the real work described in spec §4, as a
+This is the module doing the real work described in spec section 4, as a
 sequence of passes over the AST, each with a narrow job:
 
 1. **`symbol_table.hpp/.cpp`** — walks the tree once, building one scope
@@ -233,36 +307,36 @@ sequence of passes over the AST, each with a narrow job:
    This is what makes `badge.x` resolvable later — look up `badge` in the
    nearest enclosing scope chain.
 
-2. **`dimension_resolver.hpp/.cpp`** — implements §4.1: resolves every
+2. **`dimension_resolver.hpp/.cpp`** — implements section 4.1: resolves every
    `%` value against its node's resolution basis, top-down starting from
    the page content box. This *must* run before reference resolution,
    since references read already-resolved absolute values.
 
-3. **`reference_resolver.hpp/.cpp`** — implements §4.2: builds a
+3. **`reference_resolver.hpp/.cpp`** — implements section 4.2: builds a
    dependency graph over `(node, property)` pairs touched by `self./
    parent./page./IDENT.` references, topologically sorts it, and evaluates
    in that order. A cycle is a diagnostic with the full cycle path, not a
    crash — this is worth a dedicated small `DependencyGraph` type with its
    own unit tests, since cycle detection is exactly the kind of thing that
-   looks right until it isn't (see §8, testing).
+   looks right until it isn't (see section 5, testing).
 
 4. **`shader_typecheck.hpp/.cpp`** — walks each `shader_expr` tree,
-   inferring/checking types against the builtin signatures in spec §3.3,
+   inferring/checking types against the builtin signatures in spec section 3.3,
    validating swizzles (`.rgb` only valid on `vec3`/`vec4`, etc.), and
    producing the typed `shader::IR` that `shader/` consumes. This is a
    real little type checker — give it its own file rather than folding it
    into `scene_builder`.
 
 5. **`scene_builder.hpp/.cpp`** — the final pass: given a fully-resolved
-   AST, constructs the immutable `scene::Node` tree (§4 below). This is
+   AST, constructs the immutable `scene::Node` tree (section 4 below). This is
    deliberately the *only* place that constructs scene graph nodes — no
    other code should call `scene::Rect{...}` directly.
 
 Run these five passes in the order listed from a single
-`sema::analyze(ast::Document&, DiagnosticEngine&) -> std::optional<scene::Document>`
+`sema::analyze(const Document&, DiagnosticsEngine&) -> std::optional<scene::Document>`
 entry point that the CLI (and later, tests) calls.
 
-### `scene/`
+### `scene/` *(planned)*
 
 Plain data, no behavior. This is intentional — it should be trivially
 walkable by three completely different consumers (renderer, each
@@ -294,9 +368,9 @@ Everything here is an absolute number in absolute units (points). No
 percentages, no references, no `expr` trees survive into this layer —
 that's the whole point of sema having already run.
 
-### `shader/` — the part worth designing carefully
+### `shader/` *(planned)* — the part worth designing carefully
 
-Per principle 3 (§1), this module has one input (the typed IR from
+Per principle 3 (section 1), this module has one input (the typed IR from
 `shader_typecheck`) and two independent output backends:
 
 ```cpp
@@ -321,10 +395,10 @@ namespace shader {
   Pure text generation from the same IR, consumed only by `render/`. This
   is the piece that can genuinely wait.
 
-### `render/`
+### `render/` *(planned)*
 
 - **`gpu_context.hpp/.cpp`** — thin wrapper around whatever GPU
-  abstraction you pick (see §7 for the recommendation) — device creation,
+  abstraction you pick (see section 7 for the recommendation) — device creation,
   surface/swapchain, shader module compilation from the WGSL text
   `wgsl_codegen` produces.
 - **`scene_renderer.hpp/.cpp`** — walks `scene::Document`, and for each
@@ -336,14 +410,14 @@ namespace shader {
 - **`window.hpp/.cpp`** — GLFW (or SDL2) window + input, owns the render
   loop, re-invokes `scene_renderer` on file change for live preview.
 
-### `export/`
+### `export/` *(planned)*
 
 ```cpp
 class Exporter {
 public:
     virtual ~Exporter() = default;
     virtual bool exportTo(const scene::Document&, const std::filesystem::path&,
-                           DiagnosticEngine&) = 0;
+                           DiagnosticsEngine&) = 0;
 };
 ```
 
@@ -383,7 +457,7 @@ should use the ownership model that fits its shape:
 | Stage | Representation | Why |
 |---|---|---|
 | Tokens | `std::vector<Token>`, parser holds an index | flat, no ownership question |
-| AST | `std::variant` for `Expr`/`ShaderExpr`/`FillExpr`; `std::vector<NodeDecl>` for structural nesting | closed value sets → variant; open-ended lists → vector |
+| AST | `std::variant` (wrapped in `Expr` / `Fill`, which also carry the span); `std::vector<NodeDecl>` for structural nesting | closed value sets → variant; open-ended lists → vector |
 | Scene graph | Same variant approach as AST, but immutable after `scene_builder` produces it | read-only, shared by renderer + N exporters — no mutation aliasing to worry about |
 
 Avoid a classic `virtual` base-class AST (`class ExprNode { virtual ~ExprNode() = default; ... }`
@@ -396,20 +470,24 @@ avoids heap-allocating every single leaf node.
 
 ## 5. Diagnostics-driven testing strategy
 
-- **`tests/lexer_tests.cpp`** — you're already positioned for this (the
-  `CMakeLists.txt` gtest scaffold is commented out and ready). Cover the
-  cases from the last two patches explicitly: unterminated strings,
-  hex-color length validation, `=` vs `==` vs `=>`.
+- **`tests/lexer_tests.cpp`** — no tests exist yet, but the gtest scaffold in
+  `CMakeLists.txt` is commented out and ready (add `gtest` to `vcpkg.json`
+  first). Cover explicitly: unterminated strings, hex-color length validation
+  (3/4/6/8 digits), lone `&` / `|`, and `=` vs `==` vs `=>`. The `#RGB` /
+  `#RGBA` shorthand expansion happens in the parser, so it belongs in the
+  parser tests. `examples/lexer_smoke.folio` is a ready-made input for the
+  token-stream tests.
 - **`tests/parser_tests.cpp`** — golden-file based: `.folio` snippet in →
   `ast_printer` text dump out, diffed against a checked-in `.expected.txt`.
   Far less brittle than asserting on individual AST fields per test.
+  `examples/errors.folio` is a ready-made seed for the diagnostics goldens.
 - **`tests/sema_tests.cpp`** — this is where the interesting bugs will
   actually live (percentage cascades through nested groups, reference
   cycles, `self.width`-before-`width`-is-set). Write these adversarially:
   a group whose `width` is itself a percentage of its own parent; a
   three-node reference cycle; a sibling reference to a node declared later
-  in the file (should work, per spec §4.2) vs. a `statement` local used
-  before its declaration (should fail, per spec §2).
+  in the file (should work, per spec section 4.2) vs. a `statement` local used
+  before its declaration (should fail, per spec section 2).
 - **`tests/shader_interpreter_tests.cpp`** — feed the CPU interpreter
   small `shader_expr` IRs directly (skip the parser) and assert exact
   pixel colors for known inputs. This is your correctness oracle for the
@@ -434,6 +512,12 @@ folio_export     (export/*)                                     — freetype, ha
 folio_render     (render/*)                                     — GPU backend, GLFW
 folioc           CLI: links folio_frontend + folio_shader + folio_export (+ folio_render optionally)
 ```
+
+Today there is a single `folio_core` library (diagnostics, lexer, parser; the
+AST is header-only) and the `folioc` executable; the split above happens as
+sema, shader, and export land. `vcpkg.json` is empty, and the presets in
+`CMakePresets.json` are Windows-only (Ninja generator + vcpkg toolchain), so
+other platforms configure manually — see the README.
 
 This means `folio_frontend` + `folio_shader` + their tests build and run
 with an **empty `vcpkg.json`**, exactly as today, for as long as possible
@@ -466,12 +550,12 @@ made yet.
 
 ## 8. Suggested build order
 
-The dependency graph in §6 is also the recommended sequence — each step
+The dependency graph in section 6 is also the recommended sequence — each step
 unlocks something runnable end-to-end:
 
-1. **`diagnostics/`** — small, everything else leans on it immediately.
-2. **`ast/`** (+ `ast_printer`) — no logic yet, just the tree shape.
-3. **`parser/`** — `parser.cpp` + shared `expr_parser.cpp`. First
+1. **`diagnostics/`** — small, everything else leans on it immediately. *(done)*
+2. **`ast/`** (+ `ast_printer`) — no logic yet, just the tree shape. *(AST done; `ast_printer` outstanding)*
+3. **`parser/`** — `parser.cpp` + shared `expr_parser.cpp` *(parser done and run by `folioc`; milestone only partly reached)*. First
    milestone: `folioc` can parse a `.folio` file and pretty-print its AST.
 4. **`sema/`** — all five passes. Second milestone: `folioc` can report
    "3 nodes, page 595x842pt, no errors" for a real file, with reference
@@ -486,6 +570,12 @@ unlocks something runnable end-to-end:
 10. **`render/`** (`wgsl_codegen` + `gpu_context` + `scene_renderer` +
     `window`) — live preview. Everything above already works without it,
     so it's no longer blocking the rest of the tool.
+
+**Where things stand:** the parser is written and `folioc` runs it, but step
+3's milestone isn't fully reached: until `ast_printer` exists, `folioc` prints
+only a short outline of the parsed nodes (an interim function in `main.cpp`)
+instead of dumping the whole tree. Closing that out, plus the first
+lexer/parser golden tests, is what remains before starting sema.
 
 By the end of step 7 you have a command-line compiler that turns `.folio`
 source into a real SVG file — a genuinely useful, demoable tool — without

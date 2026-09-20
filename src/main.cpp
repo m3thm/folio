@@ -1,16 +1,62 @@
+#include "ast/ast.hpp"
+#include "diagnostics/diagnostics_engine.hpp"
 #include "lexer/lexer.hpp"
 #include "lexer/token.hpp"
-#include "diagnostics/diagnostics_engine.hpp"
+#include "parser/parser.hpp"
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
-// TODO once the parser exists:
-//   3. Parser parser(tokens); auto document = parser.parse();
-//   4. do something with the parsed Document (print it, later feed a
-//      scene-graph builder)
+// folioc: the Folio compiler CLI.
+//
+// Pipeline so far: source -> lexer -> tokens -> parser -> AST.
+// Semantic analysis, the scene graph, and the exporters don't exist yet, so
+// for now a successful run prints a short outline of what was parsed.
 
 namespace {
+
+    constexpr std::string_view kUsage =
+        "usage: folioc [--tokens] <file.folio>\n"
+        "\n"
+        "  --tokens    also print the token stream before parsing\n"
+        "  -h, --help  show this message\n";
+
+    struct Options {
+        std::string path;
+        bool dumpTokens = false;
+        bool showHelp = false;
+    };
+
+    // Returns false (after printing why) if the command line is malformed.
+    bool parseArgs(int argc, char** argv, Options& options) {
+        for (int i = 1; i < argc; ++i) {
+            const std::string_view arg = argv[i];
+
+            if (arg == "--tokens") {
+                options.dumpTokens = true;
+            }
+            else if (arg == "-h" || arg == "--help") {
+                options.showHelp = true;
+            }
+            else if (arg.size() > 1 && arg[0] == '-') {
+                std::cerr << "folioc: unknown option '" << arg << "'\n";
+                return false;
+            }
+            else if (!options.path.empty()) {
+                std::cerr << "folioc: more than one input file given ('"
+                    << options.path << "' and '" << arg << "')\n";
+                return false;
+            }
+            else {
+                options.path = std::string(arg);
+            }
+        }
+        return true;
+    }
 
     // Reads the whole file at `path` into a string. Returns false (and
     // leaves `out` untouched) if the file couldn't be opened.
@@ -37,34 +83,113 @@ namespace {
         }
     }
 
+    // Interim stand-in for the planned ast_printer: enough to see that the
+    // parse produced the tree you expect. Replace with the real printer.
+
+    const char* nodeTypeName(folio::NodeType type) {
+        switch (type) {
+        case folio::NodeType::Rect:    return "rect";
+        case folio::NodeType::Circle:  return "circle";
+        case folio::NodeType::Ellipse: return "ellipse";
+        case folio::NodeType::Path:    return "path";
+        case folio::NodeType::Text:    return "text";
+        case folio::NodeType::Image:   return "image";
+        case folio::NodeType::Group:   return "group";
+        }
+        return "?";
+    }
+
+    std::string describePageSize(const folio::PageDecl& page) {
+        if (!page.size) return "no size";
+        if (page.size->preset) return "size " + *page.size->preset;
+        return "custom size";
+    }
+
+    void printOutline(const std::vector<folio::NodeDecl>& nodes, int depth) {
+        for (const auto& node : nodes) {
+            std::cout << std::string(static_cast<std::size_t>(depth) * 2, ' ')
+                << nodeTypeName(node.type) << ' '
+                << (node.name ? *node.name : std::string("(unnamed)")) << '\n';
+            printOutline(node.children, depth + 1);
+        }
+    }
+
+    void printSummary(const std::string& path, const folio::Document& document) {
+        std::cout << path << ": page (" << describePageSize(document.page) << "), "
+            << document.nodes.size() << " top-level node"
+            << (document.nodes.size() == 1 ? "" : "s") << '\n';
+        printOutline(document.nodes, 1);
+    }
+
+    // "2 errors, 1 warning" (omits zero counts)
+    std::string countDiagnostics(const folio::DiagnosticsEngine& engine) {
+        std::size_t errors = 0, warnings = 0;
+        for (const auto& diag : engine.diagnostics()) {
+            if (diag.severity == folio::Diagnostic::Severity::Error) ++errors;
+            else if (diag.severity == folio::Diagnostic::Severity::Warning) ++warnings;
+        }
+
+        std::string result;
+        if (errors > 0) {
+            result += std::to_string(errors) + (errors == 1 ? " error" : " errors");
+        }
+        if (warnings > 0) {
+            if (!result.empty()) result += ", ";
+            result += std::to_string(warnings) + (warnings == 1 ? " warning" : " warnings");
+        }
+        return result;
+    }
+
 }
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
-        std::cout << "folioc: no input file. usage: folioc <file.folio>\n";
+    Options options;
+    if (!parseArgs(argc, argv, options)) {
+        std::cerr << kUsage;
+        return 1;
+    }
+    if (options.showHelp) {
+        std::cout << kUsage;
         return 0;
     }
-
-    const std::string path = argv[1];
-    std::string source;
-    if (!readFile(path, source)) {
-        std::cerr << "folioc: could not open file '" << path << "'\n";
+    if (options.path.empty()) {
+        std::cerr << "folioc: no input file\n" << kUsage;
         return 1;
     }
 
+    std::string source;
+    if (!readFile(options.path, source)) {
+        std::cerr << "folioc: could not open file '" << options.path << "'\n";
+        return 1;
+    }
+
+    // One engine for the whole run: lexer and parser report into it, so all
+    // diagnostics come out together, in the order they were found.
     folio::DiagnosticsEngine engine;
+
     folio::Lexer lexer(source, engine);
     std::vector<folio::Token> tokens = lexer.tokenize();
 
-    std::cout << "folioc: " << tokens.size() << " tokens from '" << path << "'\n";
-    printTokens(tokens);
+    if (options.dumpTokens) {
+        std::cout << options.path << ": " << tokens.size() << " tokens\n";
+        printTokens(tokens);
+        std::cout << '\n';
+    }
+
+    // The parser copes with lexer errors (Invalid tokens) and recovers, so run
+    // it even if lexing reported problems: the person gets every error in one go.
+    folio::Parser parser(std::move(tokens), engine);
+    folio::Document document = parser.parse();
+
+    if (!engine.diagnostics().empty()) {
+        engine.printAll(std::cerr, source, options.path);
+    }
 
     if (engine.hasErrors()) {
-        std::cout << "\n";
-        engine.printAll(std::cout, source);
+        std::cerr << "folioc: " << countDiagnostics(engine) << " in '" << options.path << "'\n";
         return 1;
     }
 
-    std::cout << "\nno diagnostics.\n";
+    printSummary(options.path, document);
     return 0;
 }
