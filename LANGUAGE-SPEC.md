@@ -14,6 +14,10 @@ IDENT       := [a-zA-Z_][a-zA-Z0-9_]*        (* excludes any KEYWORD below *)
 NUMBER      := [0-9]+ ('.' [0-9]+)?
 STRING      := '"' (any char except '"', or escaped) * '"'
 UNIT        := 'px' | 'pt' | 'mm' | 'cm' | 'in'
+             (* semantic analysis converts every length to points (pt):
+                1in = 72pt, 1cm = 72/2.54 pt (about 28.346pt),
+                1mm = 72/25.4 pt (about 2.835pt), and 1px = 0.75pt
+                (96 px per inch). *)
 HEXCOLOR    := '#' ( [0-9a-fA-F]{3,4} | [0-9a-fA-F]{6} | [0-9a-fA-F]{8} )
              (* 3/4 digits are #RGB / #RGBA shorthand: each digit is doubled,
                 so #F80 == #FF8800 and #F808 == #FF880088. *)
@@ -25,7 +29,10 @@ KEYWORD     := 'true' | 'false'
                 so a node/variable named e.g. `self` or `true` is an error,
                 not an ambiguity resolved later. *)
 
-PUNCT       := '{' '}' '(' ')' '[' ']' ':' ',' '.' ';' '->' '=>'
+PUNCT       := '{' '}' '(' ')' '[' ']' ':' ',' '.' ';' '@' '->' '=>'
+             (* '=>' is lexed but not used by any production in phase 1;
+                it is reserved for later phases. '@' introduces a gradient
+                stop position (section 3, `stop`). *)
 OPERATOR    := '+' '-' '*' '/' '%' '<' '>' '<=' '>=' '=' '==' '!='
                 '&&' '||' '!' '?' ':'
              (* '%' is a single lexeme used two ways, disambiguated by parser
@@ -39,6 +46,9 @@ OPERATOR    := '+' '-' '*' '/' '%' '<' '>' '<=' '>=' '=' '==' '!='
 
 COMMENT     := '//' (any char except newline)*
              | '/*' (any char) * '*/'
+             (* a '/*' with no closing '*/' before end of file is a lexical
+                error, not a comment that silently swallows the rest of the
+                file. Block comments do not nest. *)
 
 WHITESPACE  := (' ' | '\t' | '\n' | '\r')+   // not significant, discarded
 ```
@@ -132,6 +142,11 @@ statement       := IDENT '=' expr ';'?
        later in the same body (no forward reference, no recursion). *)
 ```
 
+**Each property at most once.** A property may appear at most once in a
+`node_body` and at most once in a `page_decl`; repeating one (`x: 1  x: 2`)
+is an error, reported by the parser. (A `statement` local is not a property:
+it is checked by semantic analysis.)
+
 ---
 
 ## 2.1 Expressions, Dimensions, and References
@@ -164,14 +179,21 @@ primary_num     := sized_number
 
 sized_number    := NUMBER (UNIT | '%')? ;
                   (* bare NUMBER (no suffix) is a unitless scalar — legal for
-                     opacity, rotation (degrees), font_weight, line_height,
-                     z, and as an operand in arithmetic. NUMBER with UNIT is
-                     an absolute dimension. NUMBER with '%' is a percentage,
-                     legal only for x/y/width/height/radius/font_size — see
-                     section 4.1 for what it's a percentage OF. Mixing a UNIT/percent
-                     value with a bare scalar via + or - across incompatible
-                     kinds (e.g. `50% + 3` outside of width/height context)
-                     is a semantic-analysis error, not a parse error. *)
+                     opacity, rotation (degrees), font_weight, line_height
+                     (a multiple of font_size, e.g. 1.5), z, and as an
+                     operand in arithmetic. NUMBER with UNIT is an absolute
+                     dimension (line_height: 18pt is an absolute line
+                     spacing). In a length-typed property (x, y, width,
+                     height, radius, font_size, stroke width,
+                     path point coordinates) a bare NUMBER is read as pt, the
+                     same default as `dimension` — so `x: 0` and
+                     `font_size: 32` are valid. NUMBER with '%' is a
+                     percentage, legal only for x/y/width/height/radius —
+                     see section 4.1 for what it's a percentage OF. Mixing a
+                     UNIT/percent value with a bare scalar via + or - across
+                     incompatible kinds, or using '%' on any other property
+                     (e.g. `font_size: 50%`), is a semantic-analysis error,
+                     not a parse error. *)
 
 reference       := ('self' | 'parent' | 'page' | IDENT) '.' IDENT ;
                   (* 'self.<prop>'   — this node's own resolved property
@@ -191,11 +213,11 @@ reference       := ('self' | 'parent' | 'page' | IDENT) '.' IDENT ;
                                        must name a node in scope: a sibling
                                        within the same group/page, or an
                                        ancestor group. Referencing a node's
-                                       own descendant, or a node later in
-                                       document order that isn't yet
-                                       resolved, is a semantic-analysis
-                                       error (no forward/cyclic references —
-                                       see section 4.2). *)
+                                       own descendant is a semantic-analysis
+                                       error. Source order is irrelevant: a
+                                       node may reference a sibling declared
+                                       later in the file. Only cycles are
+                                       rejected — see section 4.2. *)
 ```
 
 `<prop>` after a `.` is restricted to the resolved numeric properties of a
@@ -263,6 +285,10 @@ shader_body     := shader_stmt* 'return' shader_expr ';' ;
 shader_stmt     := IDENT ':' type '=' shader_expr ';'     (* local binding *)
                   ;
 
+type            := 'float' | 'int' | 'bool' | 'vec2' | 'vec3' | 'vec4'
+                  | 'color' | 'texture'
+                  ;                                       (* see section 3.4 *)
+
 stroke_expr     := 'none'
                   | '{' 'color' ':' fill_expr ',' 'width' ':' expr
                     (',' 'cap' ':' cap_style)?
@@ -308,20 +334,29 @@ vec_constructor := ('vec2' | 'vec3' | 'vec4') '(' expr_list ')' ;
 
 builtin_call    := builtin_fn '(' expr_list ')' ;
 
+builtin_fn      := IDENT ;   (* must name a function listed in section 3.3;
+                                anything else is a semantic-analysis error *)
+
 expr_list       := shader_expr (',' shader_expr)* ;
 ```
 
 ### 3.2 Built-in shader variables (implicitly in scope inside `shader { }`)
 
 ```
-pixel        : vec2    -- current fragment position in local node space, 0..1
-node_size    : vec2    -- width/height of the node in local units
-uv           : vec2    -- normalized texture coordinate, alias-equivalent to pixel
+pixel        : vec2    -- current fragment position in node-local units,
+                          -- from (0, 0) to node_size (top-left origin)
+node_size    : vec2    -- width/height of the node in the same local units
+uv           : vec2    -- normalized coordinate, pixel / node_size, in 0..1
 ```
 
-*(Note: `time` is intentionally NOT available in phase 1 — no animation yet.
+`pixel` and `uv` are _not_ aliases: `pixel` is in the same units as
+`node_size` (so `pixel - node_size * 0.5` is the offset from the node's
+center, as the section 5 example uses it), while `uv` is always 0..1
+(`uv.x` as a horizontal blend factor in that example).
+
+_(Note: `time` is intentionally NOT available in phase 1 — no animation yet.
 Its later addition in phase 2 is exactly the trigger for needing the
-CPU/GPU classification pass discussed earlier.)*
+CPU/GPU classification pass discussed earlier.)_
 
 ### 3.3 Built-in shader functions
 
@@ -367,23 +402,27 @@ texture          -- opaque handle, only usable via sample()
 
 ## 4. Semantic Resolution Rules
 
-Grammar alone doesn't pin down what `100%` or `parent.width` *mean* — that's
+Grammar alone doesn't pin down what `100%` or `parent.width` _mean_ — that's
 resolved in the semantic-analysis pass, after parsing and before the scene
 graph is built. This section is normative for that pass.
+
+Both percentages (4.1) and references (4.2) are _dependencies between node
+properties_, and they are resolved together over a single dependency graph
+(4.2). Neither is resolved "first".
 
 ### 4.1 Percentage resolution
 
 A `%` value on a property is always resolved against the corresponding
 axis/property of the node's **resolution basis**, defined as:
 
-| Property           | Resolves against (`%` of...)                          |
-|---------------------|--------------------------------------------------------|
-| `width`             | resolution basis's `width`                              |
-| `height`             | resolution basis's `height`                             |
-| `x`                  | resolution basis's `width`                               |
-| `y`                  | resolution basis's `height`                              |
-| `radius`             | the smaller of resolution basis's `width`/`height`, ÷ 2  |
-| `font_size`, `line_height` | `%` is not permitted — parse-time restriction to absolute/unitless only |
+| Property                   | Resolves against (`%` of...)                                                                                                |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `width`                    | resolution basis's `width`                                                                                                  |
+| `height`                   | resolution basis's `height`                                                                                                 |
+| `x`                        | resolution basis's `width`                                                                                                  |
+| `y`                        | resolution basis's `height`                                                                                                 |
+| `radius`                   | the smaller of resolution basis's `width`/`height`, ÷ 2                                                                     |
+| `font_size`, `line_height` | `%` is not permitted — a semantic-analysis error (the parser accepts it, because `%` can appear inside a larger expression) |
 
 Where **resolution basis** is:
 
@@ -392,50 +431,132 @@ Where **resolution basis** is:
 - the page's **content box** (page size minus margins on all sides) for any
   node declared directly at the top level (a sibling of no enclosing group).
 
-Percentages never resolve against the node's *own* prior value (no
+Percentages never resolve against the node's _own_ prior value (no
 self-referential `%`, which is why `page_prop` values like `margin` and
 `size` — resolved before any node exists — reject `%` outright at the
 grammar level; see the `dimension` rule in section 2).
 
-Resolution proceeds top-down: a group's own `width`/`height` must be fully
-resolved (to an absolute unit) before its children's percentages can be
-computed. A group whose own `width`/`height` is *itself* a percentage is
-resolved against its own basis first, recursively, up to the page content
-box, which is always absolute. This gives a strict top-down dependency
-order with no cycles possible through nesting alone (cycles are still
-possible through `reference` expressions — see section 4.2).
+A percentage is an implicit dependency on the basis's `width`/`height`
+(for `radius`, on both). A group's own `width`/`height` must therefore be
+resolved to an absolute unit before its children's percentages can be
+evaluated. That group's `width`/`height` may itself be a percentage, a
+reference, or a plain dimension; in every case it is just another property
+in the dependency graph of section 4.2. The page content box is always
+absolute, so it is the root of that graph and has no dependencies of its
+own. Nesting alone can never form a cycle, since a node's basis is always an
+ancestor; cycles can only arise through `reference` expressions.
 
 ### 4.2 Reference resolution
 
-`self.`, `parent.`, `page.`, and `IDENT.` references (section 2.1) are resolved in
-the same pass, after percentages, using each node's already-resolved
-absolute values:
+`self.`, `parent.`, `page.`, and `IDENT.` references (section 2.1) are
+resolved in the same pass as percentages (4.1), over one dependency graph:
 
-- References form a dependency graph over resolved node properties. This
-  graph must be acyclic; a cycle (e.g. `badge.x` depending on `logo.x`,
-  which depends back on `badge.x`) is a semantic-analysis error, reported
+- **The graph.** Its vertices are `(node, property)` pairs. There is an edge
+  from `A.p` to `B.q` whenever evaluating `A.p` requires the value of
+  `B.q`. Edges come from: a `self.`/`parent.`/`page.`/`IDENT.` reference in
+  the expression for `A.p`; a `%` in `A.p` (an edge to the basis's
+  `width`/`height`, per 4.1); and any `statement` local used by `A.p`'s
+  expression, which contributes the edges of the local's own expression.
+  `self.` references are ordinary edges — a node's own properties are
+  vertices like any others. Properties are evaluated in a topological order
+  of this graph, each after everything it depends on.
+- **Cycles are the only error.** The graph must be acyclic. A cycle (e.g.
+  `badge.x` depending on `logo.x`, which depends back on `badge.x`; or
+  `width: self.height` together with `height: self.width`; or the
+  degenerate `width: self.width`) is a semantic-analysis error, reported
   with the full cycle path.
-- `IDENT.<prop>` may only name a node that is a sibling (within the same
-  group or page) or an ancestor group of the referencing node — never a
-  descendant. This is a scoping rule, not just a style guideline: it keeps
-  the dependency graph shallow and rules out most accidental cycles by
+- **Neither source order nor property order matters.** A node may reference a
+  sibling declared later in the file, and a node's own properties may be
+  written in any order: `height: self.width * 0.5` is valid whether `width:`
+  appears before or after it, because the graph orders the evaluation, not
+  the file. (This differs from `statement` locals inside a single node body,
+  which _are_ strictly ordered — see the note under `statement` in
+  section 2.)
+- **Scoping.** `IDENT.<prop>` may only name a node that is a sibling (within
+  the same group or page) or an ancestor group of the referencing node —
+  never a descendant. This is a scoping rule, not just a style guideline: it
+  keeps the dependency graph shallow and rules out most accidental cycles by
   construction.
-- Document order does **not** constrain references — a node may reference
-  a sibling declared later in the file. Only the acyclicity check in the
-  bullet above governs validity, not source position. (This differs from
-  `statement` locals inside a single node body, which *are* strictly
-  ordered — see the note under `statement` in section 2.)
-- `self.<prop>` may reference a property resolved earlier in the same
-  node's evaluation (e.g. `height: self.width * 0.5` is valid because
-  `width` is evaluated first per the property's position in `common_prop`
-  ordering conventions); `self.<prop>` referencing a property not yet
-  computed for that node is an error.
+- **Omitted properties.** A reference reads the target property's resolved
+  value, and that includes a default or derived value (section 4.4): `badge.x`
+  is valid even if `badge` never sets `x`. The one exception is a `text` or
+  `image` node's _automatic_ width/height, which cannot be read (4.4);
+  referencing one is a semantic-analysis error.
 
 ### 4.3 Booleans
 
 `bool_literal` (`true` / `false`) is the only legal value for `visible` and
 `closed`. Unlike numeric properties, boolean properties do not accept
 `expr` — no computed/conditional visibility in phase 1.
+
+### 4.4 Defaults, derived, and required properties
+
+A property a node omits gets its value from this section. Defaulted and
+derived values are ordinary resolved values: references (4.2) and `%` bases
+(4.1) read them exactly like explicit ones, and they are vertices in the same
+dependency graph.
+
+**Every node type:**
+
+| Property   | If omitted                                                           |
+| ---------- | -------------------------------------------------------------------- |
+| `x`, `y`   | `0`                                                                  |
+| `rotation` | `0` (degrees)                                                        |
+| `opacity`  | `1`                                                                  |
+| `z`        | `0`. Nodes with equal `z` are drawn in document order, later on top. |
+| `visible`  | `true`                                                               |
+| `stroke`   | `none`                                                               |
+| `fill`     | none (transparent), except `text`, which defaults to `#000000`       |
+
+**Size, by node type:**
+
+| Node type         | `width` / `height`                                                                                                                                                                                                                                                                                  |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rect`, `ellipse` | **Required.** Omitting either is a semantic-analysis error.                                                                                                                                                                                                                                         |
+| `group`           | Default `100%` — of the group's own resolution basis (4.1). This is what gives a child's `%` something to resolve against when the group sets no size, as with `footer` in section 5.                                                                                                               |
+| `circle`          | `radius` is **required**. `width` and `height` are derived, both `2 × radius`; setting `width` or `height` on a circle is an error (use `radius`).                                                                                                                                                  |
+| `path`            | `points` is **required**. `width` and `height` are derived from the points' bounding box (max minus min on each axis); setting them explicitly is an error.                                                                                                                                         |
+| `text`, `image`   | Optional. If omitted, the size is **automatic**: it comes from the content (text layout, the image's own dimensions) and is determined by the renderer/exporters, not by semantic analysis. An automatic size cannot be referenced (see 4.2); set an explicit `width`/`height` to make it readable. |
+
+The reasoning: something that is drawn should say how big it is — a `rect`
+that silently filled its container would be a surprise, and a missing size is
+easy to diagnose. A `group`'s job is to contain other nodes, so "the whole
+container" is a harmless default. Automatic text and image sizes depend on
+fonts and image files that the front end never loads, which is why they can't
+take part in the dependency graph.
+
+**Text properties** (`text` nodes):
+
+| Property      | If omitted                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `content`     | **Required.** A `text` node with no `content` is a semantic-analysis error.                                               |
+| `font`        | `"sans-serif"`, a generic family that the renderer/exporter resolves to a concrete font.                                  |
+| `font_size`   | `12` (pt)                                                                                                                 |
+| `font_weight` | `normal`. `normal` means 400 and `bold` means 700; a NUMBER is used as written (conventionally 100–900).                  |
+| `align`       | `left`                                                                                                                    |
+| `line_height` | `1.2`. A unitless value is a multiple of `font_size` (`1.2` = 120%); a value with a unit is an absolute spacing (`18pt`). |
+
+A named `font` that can't be found is not a semantic-analysis error, because
+the front end never looks fonts up: the renderer/exporter falls back to the
+generic default and reports a warning.
+
+**Image properties** (`image` nodes):
+
+| Property | If omitted                                                                   |
+| -------- | ---------------------------------------------------------------------------- |
+| `source` | **Required.** An `image` node with no `source` is a semantic-analysis error. |
+| `fit`    | `contain` (never crops or distorts the image)                                |
+
+An image's automatic size (see the size table above) works like this: if both
+`width` and `height` are omitted, the box is the image's own pixel size
+(1px = 0.75pt); if only one is omitted, it is computed from the image's aspect
+ratio; if both are set, `fit` decides how the image sits inside that box. So
+`fit` only has an effect when both are set.
+
+None of these text and image properties can be read through references
+(2.1 limits `<prop>` to the numeric properties), so semantic analysis does
+not need their default _values_, only the required-property checks; the scene
+builder applies the defaults.
 
 ---
 
@@ -521,9 +642,9 @@ tokens
    │  parser (recursive descent, grammar above)
    ▼
 AST  (page_decl, node_decl*, nested fill_expr / shader_expr trees)
-   │  semantic pass: type check, resolve imports, resolve % / unit dimensions,
-   │  resolve self./parent./page./IDENT. references (topological order,
-   │  cycle detection per section 4.2)
+   │  semantic pass: type check, resolve imports, then resolve units, %, and
+   │  self./parent./page./IDENT. references together over one dependency
+   │  graph (topological order, cycle detection per section 4.2)
    ▼
 Scene Graph  (concrete Nodes: Rect, Circle, Ellipse, Path, Text, Image, Group,
               each holding a resolved FillDescriptor)

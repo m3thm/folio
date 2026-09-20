@@ -1,5 +1,7 @@
 #include "parser/parser.hpp"
+#include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 
 // Recursive-descent parser implementation.
@@ -16,6 +18,13 @@ namespace {
     bool isReservedKeyword(const std::string& text) {
         return text == "true" || text == "false" ||
             text == "self" || text == "parent" || text == "page" || text == "at";
+    }
+
+    // The AST holds one std::optional per property, so a repeated property silently
+    // overwrites the earlier one and later stages could never tell. The parser is the
+    // last place that can see both occurrences, so it reports the repeat.
+    void reportDuplicateProperty(DiagnosticsEngine& engine, const Token& nameTok) {
+        engine.error(nameTok.span, "property '" + nameTok.lexeme + "' is set more than once; each property can appear only once");
     }
 
     NodeType nodeTypeFromKeyword(const std::string& text) {
@@ -195,16 +204,19 @@ namespace folio {
         }
 
         if (nameTok.lexeme == "size") {
+            if (page.size) reportDuplicateProperty(engine, nameTok);
             advance();
             expect(TokenKind::Colon, "expected ':' after 'size'");
             page.size = parsePageSize();
         }
         else if (nameTok.lexeme == "background") {
+            if (page.background) reportDuplicateProperty(engine, nameTok);
             advance();
             expect(TokenKind::Colon, "expected ':' after 'background'");
             page.background = parseFillExpr();
         }
         else if (nameTok.lexeme == "margin") {
+            if (page.margin) reportDuplicateProperty(engine, nameTok);
             advance();
             expect(TokenKind::Colon, "expected ':' after 'margin'");
             page.margin = parseDimension();
@@ -306,6 +318,7 @@ namespace folio {
     }
 
     void Parser::parseNodeBody(NodeDecl& node) {
+        std::unordered_set<std::string> seenProperties; // for duplicate detection; per node body
         while (!isAtEnd() && !check(TokenKind::RBrace)) {
             // group_prop: groups nest other nodes directly.
             if (node.type == NodeType::Group && check(TokenKind::Ident) && isNodeTypeKeyword(peek().lexeme)) {
@@ -322,8 +335,12 @@ namespace folio {
             // common_prop / shape_prop, both shaped `IDENT ':' ...`
             if (check(TokenKind::Ident) && peek(1).kind == TokenKind::Colon) {
                 const Token& propName = peek();
-                if (parseCommonProp(node, propName)) continue;
-                if (parseShapeProp(node, propName)) continue;
+                if (parseCommonProp(node, propName) || parseShapeProp(node, propName)) {
+                    if (!seenProperties.insert(propName.lexeme).second) {
+                        reportDuplicateProperty(engine, propName);
+                    }
+                    continue;
+                }
 
                 engine.error(propName.span, "unknown property '" + propName.lexeme + "' for this node type");
                 synchronize();

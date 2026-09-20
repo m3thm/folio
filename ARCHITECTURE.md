@@ -10,8 +10,8 @@ lexer, AST, and parser exist, `folioc` runs the lexer and parser on a file,
 and the parser accepts the full example in `LANGUAGE-SPEC.md` section 5 with
 no diagnostics. Not done yet: there is no `ast_printer` (`folioc` prints only
 a short outline of the parsed nodes), and there are no tests. Everything from
-sema onward is design only. Modules and files below are tagged *(implemented)*
-or *(planned)*; where the code differs from the original sketch, this document
+sema onward is design only. Modules and files below are tagged _(implemented)_
+or _(planned)_; where the code differs from the original sketch, this document
 describes the code.
 
 ---
@@ -27,13 +27,13 @@ A few decisions shape everything below:
 2. **The scene graph is the seam.** Once semantic analysis produces a
    scene graph — plain data, no more percentages, no more `self.width`
    references, everything resolved to absolute numbers — the renderer and
-   every exporter become independent consumers of the *same* read-only
+   every exporter become independent consumers of the _same_ read-only
    structure. This is the boundary that lets you build/test them in
    parallel and in either order.
 3. **Two shader backends, not one, from a single typed IR.** A `shader{}`
    fill needs to run in two very different places: live on the GPU (fast,
    interactive) and baked to a raster image for PDF/SVG export (correct,
-   one-shot). Building *one* shader compiler that targets both from day one
+   one-shot). Building _one_ shader compiler that targets both from day one
    is a trap — WGSL codegen is real compiler work, and if it's the only way
    to evaluate a shader, exporters are blocked on the renderer being done.
    Instead: compile `shader_expr` once to a small typed IR, then give that
@@ -80,8 +80,8 @@ folio/
 │   │   └── expr_parser.hpp/.cpp      shared precedence-climbing parser
 │   ├── sema/                         (planned)
 │   │   ├── symbol_table.hpp/.cpp     node-name scoping for references
-│   │   ├── dimension_resolver.hpp/.cpp   % / unit resolution (spec section 4.1)
-│   │   ├── reference_resolver.hpp/.cpp   dependency graph + cycles (section 4.2)
+│   │   ├── dimension_resolver.hpp/.cpp   unit conversion + % basis rules (spec section 4.1)
+│   │   ├── reference_resolver.hpp/.cpp   the one dependency graph: refs + % + cycles (section 4.2)
 │   │   ├── shader_typecheck.hpp/.cpp     shader_expr type checking
 │   │   └── scene_builder.hpp/.cpp        AST + resolved values → scene graph
 │   ├── scene/                        (planned)
@@ -118,11 +118,10 @@ folio/
 └── examples/
     ├── hello.folio                   minimal valid document
     ├── showcase.folio                the complete example from LANGUAGE-SPEC.md section 5
-    ├── lexer_smoke.folio             token edge cases; not a valid document
     └── errors.folio                  deliberately malformed input for diagnostics
 ```
 
-Anything under a directory marked *(planned)* doesn't exist yet.
+Anything under a directory marked _(planned)_ doesn't exist yet.
 `examples/showcase.folio` is the spec's complete example kept verbatim, so if
 that example changes in `LANGUAGE-SPEC.md`, update the file too.
 
@@ -135,7 +134,7 @@ never holds a `Token`).
 
 ## 3. Module breakdown
 
-### `diagnostics/` *(implemented)*
+### `diagnostics/` _(implemented)_
 
 Everything after this point — parser, every sema pass, eventually the
 exporters when a font is missing or an image fails to load — needs to
@@ -170,25 +169,26 @@ rather than having each throw exceptions or return `optional`. This lets
 the parser recover from one bad node and keep parsing (report-and-continue
 error recovery), which matters a lot for a language people will hand-edit.
 
-### `lexer/` *(implemented)*
+### `lexer/` _(implemented)_
 
 `Lexer(std::string source, DiagnosticsEngine&)`; `tokenize()` returns a
 `std::vector<Token>` ending in a `TokenKind::End` token. A `Token` is
 `{ kind, lexeme, span }`.
 
 The lexer is deliberately dumb about words. Keywords (`page`, `rect`, `fill`,
-`true`, `self`, ...) and units (`px`, `pt`, ...) are *not* separate token
+`true`, `self`, ...) and units (`px`, `pt`, ...) are _not_ separate token
 kinds: they come out as plain `Ident` tokens (a unit suffix arrives as an
 `Ident` right after its `Number`), and the parser recognizes them by context.
 That keeps the keyword list easy to extend. The reserved words from spec section 1
 (`true`, `false`, `self`, `parent`, `page`, `at`) are enforced by the parser,
 which reports an error if one is used as a node or variable name.
 
-Lexical errors reported through the engine: an unterminated string literal, a
-hex color whose digit count isn't 3, 4, 6, or 8, a lone `&` or `|` (the
-grammar only has `&&` and `||`), and any other unexpected character.
+Lexical errors reported through the engine: an unterminated string literal, an
+unterminated block comment (`/*` with no closing `*/`, reported at the opening
+`/*`), a hex color whose digit count isn't 3, 4, 6, or 8, a lone `&` or `|`
+(the grammar only has `&&` and `||`), and any other unexpected character.
 
-### `ast/` *(implemented)*
+### `ast/` _(implemented)_
 
 The AST is the direct, structural translation of the EBNF in
 `LANGUAGE-SPEC.md` — nothing resolved yet, no computed values, just "what did
@@ -245,12 +245,12 @@ How the rest of the tree is shaped:
   `statements`. `PageDecl` and `Document { PageDecl page; std::vector<NodeDecl> nodes; }`
   are plain structs too.
 
-Write `ast_printer.hpp/.cpp` *(planned, not written yet)* — a `std::visit`-based
+Write `ast_printer.hpp/.cpp` _(planned, not written yet)_ — a `std::visit`-based
 pretty-printer that dumps the tree back to a canonical text form — as part of
 this module, not as an afterthought. It's what your first parser tests will
 diff against.
 
-### `parser/` *(implemented)*
+### `parser/` _(implemented)_
 
 `Parser(std::vector<Token>, DiagnosticsEngine&)` with `Document parse()`; the
 parser holds the token vector and an index. Split into two files because the
@@ -289,6 +289,12 @@ grammar itself splits cleanly:
   (phase 2's math module is exactly the kind of thing that touches this), you
   fix it once.
 
+- **Duplicate properties**: the parser reports a property that appears twice
+  in one node body or one `page` block (`x: 1  x: 2`). This has to live here,
+  not in sema: the AST keeps one `std::optional` per property, so the second
+  value overwrites the first and no later stage can tell there were two.
+  (`statement` locals are kept in a vector, so sema can still check those.)
+
 - **Error recovery**: after reporting a diagnostic the parser calls
   `synchronize()`, which always consumes at least one token (so it can never
   loop) and then skips ahead until just after a `;`, just before a `}`, or
@@ -297,7 +303,7 @@ grammar itself splits cleanly:
   at the first `}` it sees. The goal is that a `.folio` file with one bad node
   should still parse the other nine.
 
-### `sema/` *(planned)*
+### `sema/` _(planned)_
 
 This is the module doing the real work described in spec section 4, as a
 sequence of passes over the AST, each with a narrow job:
@@ -307,18 +313,33 @@ sequence of passes over the AST, each with a narrow job:
    This is what makes `badge.x` resolvable later — look up `badge` in the
    nearest enclosing scope chain.
 
-2. **`dimension_resolver.hpp/.cpp`** — implements section 4.1: resolves every
-   `%` value against its node's resolution basis, top-down starting from
-   the page content box. This *must* run before reference resolution,
-   since references read already-resolved absolute values.
+2. **`dimension_resolver.hpp/.cpp`** — implements section 4.1's _rules_: unit
+   conversion to points (a bare number in a length property is pt), the
+   resolution basis for each node, the `%` → absolute arithmetic per property,
+   and the diagnostic for `%` on a property that doesn't allow it
+   (`font_size`, `line_height` — the parser accepts these, so this is where
+   they are caught). It also applies the defaults, derived sizes, and
+   required-property rules of spec section 4.4 (e.g. a `group` with no
+   `width` gets `100%` of its basis, a `circle`'s `width` is `2 × radius`, a
+   `rect` with no `width` is an error), so that every vertex in the graph has
+   a defined expression. Automatic `text`/`image` sizes get no vertex; a
+   reference to one is diagnosed here. It does **not** run as a separate pass ahead of
+   references: a group's `width` may itself be a reference, so a child's `%`
+   can't be evaluated until that reference has been. Instead it supplies
+   the `%` edges (`child.width → basis.width`) and the conversion function
+   that `reference_resolver` calls while evaluating.
 
-3. **`reference_resolver.hpp/.cpp`** — implements section 4.2: builds a
-   dependency graph over `(node, property)` pairs touched by `self./
-   parent./page./IDENT.` references, topologically sorts it, and evaluates
-   in that order. A cycle is a diagnostic with the full cycle path, not a
-   crash — this is worth a dedicated small `DependencyGraph` type with its
-   own unit tests, since cycle detection is exactly the kind of thing that
-   looks right until it isn't (see section 5, testing).
+3. **`reference_resolver.hpp/.cpp`** — implements section 4.2: builds **one**
+   dependency graph over `(node, property)` pairs, with an edge for every
+   `self./parent./page./IDENT.` reference, every `%` (from
+   `dimension_resolver`), and every `statement` local an expression uses.
+   `self.` references are ordinary edges — there is no separate "property
+   order" rule, and source order doesn't matter either. It topologically
+   sorts the graph and evaluates in that order. A cycle (including a
+   self-cycle like `width: self.width`) is a diagnostic with the full cycle
+   path, not a crash — this is worth a dedicated small `DependencyGraph`
+   type with its own unit tests, since cycle detection is exactly the kind
+   of thing that looks right until it isn't (see section 5, testing).
 
 4. **`shader_typecheck.hpp/.cpp`** — walks each `shader_expr` tree,
    inferring/checking types against the builtin signatures in spec section 3.3,
@@ -329,14 +350,19 @@ sequence of passes over the AST, each with a narrow job:
 
 5. **`scene_builder.hpp/.cpp`** — the final pass: given a fully-resolved
    AST, constructs the immutable `scene::Node` tree (section 4 below). This is
-   deliberately the *only* place that constructs scene graph nodes — no
-   other code should call `scene::Rect{...}` directly.
+   deliberately the _only_ place that constructs scene graph nodes — no
+   other code should call `scene::Rect{...}` directly. It is also where the
+   text and image property defaults of spec section 4.4 (`font`, `font_size`,
+   `font_weight`, `align`, `line_height`, `fit`) are applied, and where the
+   two required-property checks that nothing earlier reads are made: `text`
+   without `content`, `image` without `source` (`imageProps` unset, or an empty
+   `sourcePath`).
 
 Run these five passes in the order listed from a single
 `sema::analyze(const Document&, DiagnosticsEngine&) -> std::optional<scene::Document>`
 entry point that the CLI (and later, tests) calls.
 
-### `scene/` *(planned)*
+### `scene/` _(planned)_
 
 Plain data, no behavior. This is intentional — it should be trivially
 walkable by three completely different consumers (renderer, each
@@ -368,7 +394,14 @@ Everything here is an absolute number in absolute units (points). No
 percentages, no references, no `expr` trees survive into this layer —
 that's the whole point of sema having already run.
 
-### `shader/` *(planned)* — the part worth designing carefully
+The one deliberate exception is a `text` or `image` node whose `width`/`height`
+the author left out (spec section 4.4, _automatic_ size). Measuring text needs
+fonts and measuring an image needs the file, neither of which the front end
+loads, so `scene::TextNode` and `scene::ImageNode` carry those two fields as
+`std::optional<double>` (unset = automatic) and the renderer/exporters measure
+the content themselves. Every other node type has concrete numbers.
+
+### `shader/` _(planned)_ — the part worth designing carefully
 
 Per principle 3 (section 1), this module has one input (the typed IR from
 `shader_typecheck`) and two independent output backends:
@@ -395,7 +428,7 @@ namespace shader {
   Pure text generation from the same IR, consumed only by `render/`. This
   is the piece that can genuinely wait.
 
-### `render/` *(planned)*
+### `render/` _(planned)_
 
 - **`gpu_context.hpp/.cpp`** — thin wrapper around whatever GPU
   abstraction you pick (see section 7 for the recommendation) — device creation,
@@ -410,7 +443,7 @@ namespace shader {
 - **`window.hpp/.cpp`** — GLFW (or SDL2) window + input, owns the render
   loop, re-invokes `scene_renderer` on file change for live preview.
 
-### `export/` *(planned)*
+### `export/` _(planned)_
 
 ```cpp
 class Exporter {
@@ -454,11 +487,11 @@ public:
 Three different tree representations exist across the pipeline, and each
 should use the ownership model that fits its shape:
 
-| Stage | Representation | Why |
-|---|---|---|
-| Tokens | `std::vector<Token>`, parser holds an index | flat, no ownership question |
-| AST | `std::variant` (wrapped in `Expr` / `Fill`, which also carry the span); `std::vector<NodeDecl>` for structural nesting | closed value sets → variant; open-ended lists → vector |
-| Scene graph | Same variant approach as AST, but immutable after `scene_builder` produces it | read-only, shared by renderer + N exporters — no mutation aliasing to worry about |
+| Stage       | Representation                                                                                                         | Why                                                                               |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Tokens      | `std::vector<Token>`, parser holds an index                                                                            | flat, no ownership question                                                       |
+| AST         | `std::variant` (wrapped in `Expr` / `Fill`, which also carry the span); `std::vector<NodeDecl>` for structural nesting | closed value sets → variant; open-ended lists → vector                            |
+| Scene graph | Same variant approach as AST, but immutable after `scene_builder` produces it                                          | read-only, shared by renderer + N exporters — no mutation aliasing to worry about |
 
 Avoid a classic `virtual` base-class AST (`class ExprNode { virtual ~ExprNode() = default; ... }`
 with subclasses) — with a closed, spec-fixed grammar, `std::variant` +
@@ -472,22 +505,35 @@ avoids heap-allocating every single leaf node.
 
 - **`tests/lexer_tests.cpp`** — no tests exist yet, but the gtest scaffold in
   `CMakeLists.txt` is commented out and ready (add `gtest` to `vcpkg.json`
-  first). Cover explicitly: unterminated strings, hex-color length validation
-  (3/4/6/8 digits), lone `&` / `|`, and `=` vs `==` vs `=>`. The `#RGB` /
+  first). Cover explicitly: unterminated strings, unterminated block comments
+  (including `/*/`, and a properly closed comment right before one that isn't),
+  hex-color length validation (3/4/6/8 digits), lone `&` / `|`, and `=` vs
+  `==` vs `=>`. The `#RGB` /
   `#RGBA` shorthand expansion happens in the parser, so it belongs in the
-  parser tests. `examples/lexer_smoke.folio` is a ready-made input for the
-  token-stream tests.
+  parser tests. Use small inline snippets for token-stream tests;
+  `examples/errors.folio` already exercises most of the lexical errors.
 - **`tests/parser_tests.cpp`** — golden-file based: `.folio` snippet in →
   `ast_printer` text dump out, diffed against a checked-in `.expected.txt`.
   Far less brittle than asserting on individual AST fields per test.
   `examples/errors.folio` is a ready-made seed for the diagnostics goldens.
+  Include duplicate properties (node body and `page`, and the same property
+  name on different nodes, which is _not_ an error).
 - **`tests/sema_tests.cpp`** — this is where the interesting bugs will
   actually live (percentage cascades through nested groups, reference
-  cycles, `self.width`-before-`width`-is-set). Write these adversarially:
-  a group whose `width` is itself a percentage of its own parent; a
-  three-node reference cycle; a sibling reference to a node declared later
-  in the file (should work, per spec section 4.2) vs. a `statement` local used
-  before its declaration (should fail, per spec section 2).
+  cycles, `self.` references in either property order). Write these
+  adversarially: a group whose `width` is itself a percentage of its own
+  parent; a group whose `width` is a _reference_ with a child using `%` of
+  it; a three-node reference cycle; `width: self.height` + `height:
+self.width`, and `width: self.width` (cycles); `height: self.width * 0.5`
+  written both before and after `width:` (should work either way); a
+  sibling reference to a node declared later in the file (should work, per
+  spec section 4.2) vs. a `statement` local used before its declaration
+  (should fail, per spec section 2); `font_size: 50%` (should fail). The
+  defaults of spec section 4.4 need their own cases: `badge.x` when `badge`
+  omits `x` (works, reads `0`); the `footer` group from the section 5 example
+  (no size, child uses `100%`); a `rect` with no `width` (fails); `width:
+20pt` on a `circle` (fails); `title.width` where `title` is a `text` with no
+  `width` (fails); `self.height` on a `text` with no `height` (fails).
 - **`tests/shader_interpreter_tests.cpp`** — feed the CPU interpreter
   small `shader_expr` IRs directly (skip the parser) and assert exact
   pixel colors for known inputs. This is your correctness oracle for the
@@ -553,9 +599,9 @@ made yet.
 The dependency graph in section 6 is also the recommended sequence — each step
 unlocks something runnable end-to-end:
 
-1. **`diagnostics/`** — small, everything else leans on it immediately. *(done)*
-2. **`ast/`** (+ `ast_printer`) — no logic yet, just the tree shape. *(AST done; `ast_printer` outstanding)*
-3. **`parser/`** — `parser.cpp` + shared `expr_parser.cpp` *(parser done and run by `folioc`; milestone only partly reached)*. First
+1. **`diagnostics/`** — small, everything else leans on it immediately. _(done)_
+2. **`ast/`** (+ `ast_printer`) — no logic yet, just the tree shape. _(AST done; `ast_printer` outstanding)_
+3. **`parser/`** — `parser.cpp` + shared `expr_parser.cpp` _(parser done and run by `folioc`; milestone only partly reached)_. First
    milestone: `folioc` can parse a `.folio` file and pretty-print its AST.
 4. **`sema/`** — all five passes. Second milestone: `folioc` can report
    "3 nodes, page 595x842pt, no errors" for a real file, with reference

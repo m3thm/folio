@@ -40,9 +40,17 @@ namespace folio {
                 while (!isAtEnd() && peek() != '\n') advance();
             }
             else if (c == '/' && peek(1) == '*') {
+                const std::size_t commentStart = position;
                 advance(); advance();
                 while (!isAtEnd() && !(peek() == '*' && peek(1) == '/')) advance();
-                if (!isAtEnd()) { advance(); advance(); }
+                if (isAtEnd()) {
+                    // Point at the opening '/*' only: the comment runs to end of file, and
+                    // an underline that long would be noise.
+                    engine.error(SourceSpan{ commentStart, commentStart + 2 }, "unterminated block comment");
+                }
+                else {
+                    advance(); advance();
+                }
             }
             else {
                 break;

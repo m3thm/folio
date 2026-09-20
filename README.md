@@ -17,25 +17,25 @@ Folio source files use the `.folio` extension.
 Folio is at an early stage: the front half of the pipeline is written, and
 nothing renders or exports yet.
 
-| Component | State |
-|---|---|
-| Diagnostics engine | Done |
-| Lexer | Done |
-| AST | Done |
-| Parser | Done — accepts the full example in [`LANGUAGE-SPEC.md`](LANGUAGE-SPEC.md) section 5 with no errors |
-| `folioc` CLI | Partial — lexes and parses a file, reports diagnostics, and prints a short outline of the parsed nodes; a full AST dump needs the AST printer |
-| AST printer, semantic analysis, scene graph | Not started |
-| Shader IR, CPU interpreter, WGSL codegen | Not started |
-| SVG / PNG / PDF export | Not started |
-| Live GPU preview | Not started |
-| Tests | Not started |
+| Component                                   | State                                                                                                                                         |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Diagnostics engine                          | Done                                                                                                                                          |
+| Lexer                                       | Done                                                                                                                                          |
+| AST                                         | Done                                                                                                                                          |
+| Parser                                      | Done — accepts the full example in [`LANGUAGE-SPEC.md`](LANGUAGE-SPEC.md) section 5 with no errors                                            |
+| `folioc` CLI                                | Partial — lexes and parses a file, reports diagnostics, and prints a short outline of the parsed nodes; a full AST dump needs the AST printer |
+| AST printer, semantic analysis, scene graph | Not started                                                                                                                                   |
+| Shader IR, CPU interpreter, WGSL codegen    | Not started                                                                                                                                   |
+| SVG / PNG / PDF export                      | Not started                                                                                                                                   |
+| Live GPU preview                            | Not started                                                                                                                                   |
+| Tests                                       | Not started                                                                                                                                   |
 
 The rest of this README describes the language as specified and the planned
 pipeline; [`ARCHITECTURE.md`](ARCHITECTURE.md) has the module breakdown and
 build order. `examples/` has two valid documents (`hello.folio`, a minimal one, and
 `showcase.folio`, the complete example from `LANGUAGE-SPEC.md` section 5) and
-two deliberately broken inputs for testing the lexer and diagnostics
-(`lexer_smoke.folio` and `errors.folio`).
+`errors.folio`, a deliberately broken input for testing the lexer, parser, and
+diagnostics.
 
 ## What the language covers (Phase 1)
 
