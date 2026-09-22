@@ -1,0 +1,26 @@
+document
+  page
+    size: A4
+    background: solid(#F5F5FA)
+  rect banner
+    x: 0
+    y: 0
+    width: 100%
+    height: 120pt
+    fill: linear_gradient(angle: 90, stops: [#1E1E3C @ 0, #3C1E5A @ 1])
+  text title
+    x: 40pt
+    y: 40pt
+    fill: solid(#FFFFFF)
+    content: "Hello, Folio"
+    font: "Inter"
+    font_size: 32
+    font_weight: bold
+  circle badge
+    x: 40pt
+    y: 200pt
+    fill: solid(#FFD700)
+    stroke
+      color: solid(#000000)
+      width: 2pt
+    radius: 30pt

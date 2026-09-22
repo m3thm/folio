@@ -1,0 +1,11 @@
+// Comments are allowed anywhere whitespace is.
+page /* between the keyword and the brace */ {
+  size: /* between the colon and the value */ A4 // trailing line comment
+}
+
+/* a block comment
+   spanning several lines */
+rect a { x: 1 /* inline */ y: 2 } // after a body
+
+/*/ a comment does not close itself with the slash of its own opening */
+rect b { x: 3 }

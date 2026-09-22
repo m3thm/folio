@@ -1,0 +1,4 @@
+err_unterminated_block_comment.folio:3:1: error: unterminated block comment
+ /* this comment never ends, so it swallows the rest of the file
+ ^~
+

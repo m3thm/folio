@@ -1,0 +1,23 @@
+// The shader expression language: swizzles (including chained and on calls),
+// vector constructors, builtin calls, and the operator set. In a shader `%` is
+// always modulo, so `7%3` and `7 % 3` are the same thing here (unlike `50%`
+// in a plain expression, where it is a unit).
+page { size: A4 }
+
+rect shader_showcase {
+  fill: shader {
+    swizzle_ident: float = uv.x;
+    swizzle_chain: float = pixel.xy.x;
+    swizzle_on_call: vec2 = mix(uv, pixel, 0.5).xy;
+    vec_ctor: vec4 = vec4(1, 2, 3, 4);
+    nested_calls: float = clamp(sin(pixel.x * 3) + cos(pixel.y), 0, 1);
+    modulo_touching: float = 7%3;
+    modulo_spaced: float = 7 % 3;
+    arithmetic: float = 1 + 2 * 3 - 4 / 2;
+    negated_call: float = -abs(uv.x) * 2;
+    logic: bool = uv.x > 0.5 && uv.y < 0.5 || !(uv.x == 0);
+    ternary: float = uv.x > 0.5 ? 1 : uv.y > 0.5 ? 2 : 3;
+    hex: vec4 = #FF8800;
+    return mix(hex, vec4(0, 0, 0, 1), smoothstep(0, 1, uv.x));
+  }
+}

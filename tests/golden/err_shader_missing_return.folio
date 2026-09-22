@@ -1,0 +1,2 @@
+page { size: A4 }
+rect a { fill: shader { d: float = 1; } }

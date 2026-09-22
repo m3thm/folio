@@ -1,0 +1,44 @@
+errors.folio:19:11: error: hex color must have 3, 4, 6, or 8 digits
+     fill: #FF000
+           ^~~~~~
+
+errors.folio:21:11: error: expected '&&', found '&'
+     a = b & c;
+           ^
+
+errors.folio:23:11: error: expected '||', found '|'
+     d = e | f;
+           ^
+
+errors.folio:25:9: error: unexpected character '$'
+     e = $;
+         ^
+
+errors.folio:27:13: error: unterminated string literal
+     label = "no closing quote
+             ^~~~~~~~~~~~~~~~~~~~
+
+errors.folio:19:11: error: expected a color (a hex color, or rgb()/rgba()/hsl())
+     fill: #FF000
+           ^~~~~~
+
+errors.folio:21:11: error: expected a property, a local variable assignment, or (inside a group) a nested node declaration
+     a = b & c;
+           ^
+
+errors.folio:23:11: error: expected a property, a local variable assignment, or (inside a group) a nested node declaration
+     d = e | f;
+           ^
+
+errors.folio:25:9: error: expected an expression
+     e = $;
+         ^
+
+errors.folio:27:13: error: expected an expression
+     label = "no closing quote
+             ^~~~~~~~~~~~~~~~~~~~
+
+errors.folio:29:1: error: expected '}' to close a node body (found '')
+ 
+ ^
+

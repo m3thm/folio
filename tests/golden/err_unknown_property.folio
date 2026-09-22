@@ -1,0 +1,5 @@
+page { size: A4 }
+rect a {
+  colour: #FF0000
+  x: 1
+}

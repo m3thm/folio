@@ -1,0 +1,22 @@
+document
+  page
+    size: A4
+  rect precedence
+    local mul_binds_tighter = (+ 1 (* 2 3))
+    local grouped = (* (+ 1 2) 3)
+    local sub_is_left_assoc = (- (- 10 4) 3)
+    local div_is_left_assoc = (/ (/ 100 5) 2)
+    local mod_and_mul_same_level = (* (% 7 3) 2)
+    local percent_unit = 50%
+    local percent_in_sum = (+ 50% 10pt)
+    local negate_binds_to_operand = (* (neg x) 2)
+    local negate_group = (neg (+ 1 2))
+    local not_operand = (not flag)
+    local compare_below_add = (< (+ a 1) (* b 2))
+    local equality_below_compare = (== (< a b) (> c d))
+    local and_binds_tighter_than_or = (|| a (&& b c))
+    local grouped_or = (&& (|| a b) c)
+    local ternary = (? a b c)
+    local ternary_is_right_assoc = (? a b (? c d e))
+    local ternary_condition = (? (> (+ a 1) 2) 10 20)
+    local ternary_in_then_branch = (? a (? b 1 2) 3)

@@ -1,0 +1,3 @@
+page { size: A4 }
+rect self { x: 1 }
+rect ok { true = 5 }

@@ -1,0 +1,33 @@
+document
+  page
+    size: A4
+  rect none_stroke
+    stroke: none
+  rect plain
+    stroke
+      color: solid(#000000)
+      width: 2pt
+  rect cap_only
+    stroke
+      color: solid(#FF0000)
+      width: 1
+      cap: round
+  rect join_only
+    stroke
+      color: solid(#FF0000)
+      width: 1
+      join: bevel
+  rect cap_and_join
+    stroke
+      color: solid(#FF0000)
+      width: 1pt
+      cap: square
+      join: miter
+  rect gradient_color
+    stroke
+      color: linear_gradient(angle: 0, stops: [#000000, #FFFFFF])
+      width: 3pt
+  rect computed_width
+    stroke
+      color: solid(rgb(0, 0, 0))
+      width: (+ 1pt 1pt)

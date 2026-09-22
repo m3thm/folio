@@ -1,0 +1,64 @@
+document
+  page
+    size: A4
+  rect box
+    x: 10pt
+    y: 20pt
+    width: 100pt
+    height: 50pt
+    rotation: 15
+    opacity: 0.5
+    z: 3
+    visible: false
+  circle dot
+    radius: 25pt
+  ellipse oval
+    width: 80pt
+    height: 40pt
+  path triangle
+    fill: solid(#00FF00)
+    points: [(0, 0), (100pt, 0), (50pt, 80pt)]
+    closed: true
+  path open_line
+    points: [(0, 0), ((+ 10 5), (* 20 2))]
+  text label
+    content: "Hello"
+    font: "Inter"
+    font_size: 12pt
+    font_weight: 700
+    align: justify
+    line_height: 1.5
+  text bold_left
+    content: "x"
+    font_weight: bold
+    align: left
+  text normal_centered
+    content: "y"
+    font_weight: normal
+    align: center
+    line_height: 18pt
+  text right_aligned
+    content: "z"
+    align: right
+  image photo
+    source: import("photo.jpg")
+    fit: cover
+  image default_fit
+    source: import("a.png")
+  image stretched
+    source: import("a.png")
+    fit: stretch
+  image natural
+    source: import("a.png")
+    fit: none
+  rect
+    x: 1
+  group outer
+    x: 5pt
+    group inner
+      rect
+        width: 10pt
+      text
+        content: "deep"
+    circle
+      radius: 1

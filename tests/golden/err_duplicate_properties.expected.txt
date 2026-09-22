@@ -1,0 +1,16 @@
+err_duplicate_properties.folio:3:3: error: property 'size' is set more than once; each property can appear only once
+   size: A3
+   ^~~~
+
+err_duplicate_properties.folio:8:3: error: property 'x' is set more than once; each property can appear only once
+   x: 2
+   ^
+
+err_duplicate_properties.folio:13:3: error: property 'radius' is set more than once; each property can appear only once
+   radius: 6
+   ^~~~~~
+
+err_duplicate_properties.folio:18:3: error: property 'content' is set more than once; each property can appear only once
+   content: "b"
+   ^~~~~~~
+

@@ -1,4 +1,5 @@
 #include "ast/ast.hpp"
+#include "ast/ast_printer.hpp"
 #include "diagnostics/diagnostics_engine.hpp"
 #include "lexer/lexer.hpp"
 #include "lexer/token.hpp"
@@ -15,19 +16,22 @@
 //
 // Pipeline so far: source -> lexer -> tokens -> parser -> AST.
 // Semantic analysis, the scene graph, and the exporters don't exist yet, so
-// for now a successful run prints a short outline of what was parsed.
+// for now a successful run prints a one-line summary, or with --ast the full
+// canonical dump of the parsed tree.
 
 namespace {
 
     constexpr std::string_view kUsage =
-        "usage: folioc [--tokens] <file.folio>\n"
+        "usage: folioc [--tokens] [--ast] <file.folio>\n"
         "\n"
         "  --tokens    also print the token stream before parsing\n"
+        "  --ast       print the parsed AST (canonical dump) instead of the one-line summary\n"
         "  -h, --help  show this message\n";
 
     struct Options {
         std::string path;
         bool dumpTokens = false;
+        bool dumpAst = false;
         bool showHelp = false;
     };
 
@@ -38,6 +42,9 @@ namespace {
 
             if (arg == "--tokens") {
                 options.dumpTokens = true;
+            }
+            else if (arg == "--ast") {
+                options.dumpAst = true;
             }
             else if (arg == "-h" || arg == "--help") {
                 options.showHelp = true;
@@ -83,42 +90,16 @@ namespace {
         }
     }
 
-    // Interim stand-in for the planned ast_printer: enough to see that the
-    // parse produced the tree you expect. Replace with the real printer.
-
-    const char* nodeTypeName(folio::NodeType type) {
-        switch (type) {
-        case folio::NodeType::Rect:    return "rect";
-        case folio::NodeType::Circle:  return "circle";
-        case folio::NodeType::Ellipse: return "ellipse";
-        case folio::NodeType::Path:    return "path";
-        case folio::NodeType::Text:    return "text";
-        case folio::NodeType::Image:   return "image";
-        case folio::NodeType::Group:   return "group";
-        }
-        return "?";
-    }
-
     std::string describePageSize(const folio::PageDecl& page) {
         if (!page.size) return "no size";
         if (page.size->preset) return "size " + *page.size->preset;
         return "custom size";
     }
 
-    void printOutline(const std::vector<folio::NodeDecl>& nodes, int depth) {
-        for (const auto& node : nodes) {
-            std::cout << std::string(static_cast<std::size_t>(depth) * 2, ' ')
-                << nodeTypeName(node.type) << ' '
-                << (node.name ? *node.name : std::string("(unnamed)")) << '\n';
-            printOutline(node.children, depth + 1);
-        }
-    }
-
     void printSummary(const std::string& path, const folio::Document& document) {
         std::cout << path << ": page (" << describePageSize(document.page) << "), "
             << document.nodes.size() << " top-level node"
             << (document.nodes.size() == 1 ? "" : "s") << '\n';
-        printOutline(document.nodes, 1);
     }
 
     // "2 errors, 1 warning" (omits zero counts)
@@ -190,6 +171,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    printSummary(options.path, document);
+    if (options.dumpAst) {
+        folio::printAst(std::cout, document);
+    }
+    else {
+        printSummary(options.path, document);
+    }
     return 0;
 }

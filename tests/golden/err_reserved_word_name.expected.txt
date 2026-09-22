@@ -1,0 +1,8 @@
+err_reserved_word_name.folio:2:6: error: 'self' is a reserved word and can't be used as a node name
+ rect self { x: 1 }
+      ^~~~
+
+err_reserved_word_name.folio:3:11: error: 'true' is a reserved word and can't be used as a variable name
+ rect ok { true = 5 }
+           ^~~~
+

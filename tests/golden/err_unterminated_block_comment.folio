@@ -1,0 +1,4 @@
+page { size: A4 }
+rect a { x: 1 }
+/* this comment never ends, so it swallows the rest of the file
+rect b { x: 2 }

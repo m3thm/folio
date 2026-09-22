@@ -1,0 +1,8 @@
+err_color_arity.folio:2:16: error: 'rgb' expects 3 arguments, found 2
+ rect a { fill: rgb(1, 2) }
+                ^~~~~~~~~
+
+err_color_arity.folio:3:16: error: 'rgba' expects 4 arguments, found 3
+ rect b { fill: rgba(1, 2, 3) }
+                ^~~~~~~~~~~~~
+

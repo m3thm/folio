@@ -17,18 +17,19 @@ Folio source files use the `.folio` extension.
 Folio is at an early stage: the front half of the pipeline is written, and
 nothing renders or exports yet.
 
-| Component                                   | State                                                                                                                                         |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Diagnostics engine                          | Done                                                                                                                                          |
-| Lexer                                       | Done                                                                                                                                          |
-| AST                                         | Done                                                                                                                                          |
-| Parser                                      | Done — accepts the full example in [`LANGUAGE-SPEC.md`](LANGUAGE-SPEC.md) section 5 with no errors                                            |
-| `folioc` CLI                                | Partial — lexes and parses a file, reports diagnostics, and prints a short outline of the parsed nodes; a full AST dump needs the AST printer |
-| AST printer, semantic analysis, scene graph | Not started                                                                                                                                   |
-| Shader IR, CPU interpreter, WGSL codegen    | Not started                                                                                                                                   |
-| SVG / PNG / PDF export                      | Not started                                                                                                                                   |
-| Live GPU preview                            | Not started                                                                                                                                   |
-| Tests                                       | Not started                                                                                                                                   |
+| Component                                | State                                                                                                                                                                  |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Diagnostics engine                       | Done                                                                                                                                                                   |
+| Lexer                                    | Done                                                                                                                                                                   |
+| AST                                      | Done                                                                                                                                                                   |
+| AST printer                              | Done — canonical, deterministic dump of the tree (`folioc --ast`); the basis of the parser tests                                                                       |
+| Parser                                   | Done — accepts the full example in [`LANGUAGE-SPEC.md`](LANGUAGE-SPEC.md) section 5 with no errors                                                                     |
+| `folioc` CLI                             | Partial — lexes and parses a file, reports diagnostics, and prints a one-line summary or, with `--ast`, the parsed tree                                                |
+| Semantic analysis, scene graph           | Not started                                                                                                                                                            |
+| Shader IR, CPU interpreter, WGSL codegen | Not started                                                                                                                                                            |
+| SVG / PNG / PDF export                   | Not started                                                                                                                                                            |
+| Live GPU preview                         | Not started                                                                                                                                                            |
+| Tests                                    | Started — golden-file parser tests (which also cover lexer errors and the AST printer); lexer unit tests and tests for everything after the parser are not written yet |
 
 The rest of this README describes the language as specified and the planned
 pipeline; [`ARCHITECTURE.md`](ARCHITECTURE.md) has the module breakdown and
@@ -121,10 +122,13 @@ scene graph
 
 ## Building
 
-Requires CMake 3.25+ and a C++20 compiler. There are currently no third-party
-dependencies (`vcpkg.json` is empty), so [vcpkg](https://github.com/microsoft/vcpkg)
-is only needed if you use the bundled Windows presets, or once dependencies are
-added (planned: freetype, harfbuzz, gtest).
+Requires CMake 3.25+ and a C++20 compiler. `folioc` itself has no third-party
+dependencies. The tests use [GoogleTest](https://github.com/google/googletest),
+which `vcpkg.json` lists, so the bundled Windows presets fetch it through
+[vcpkg](https://github.com/microsoft/vcpkg) automatically. On Linux/macOS install it
+from your package manager (e.g. `apt install libgtest-dev`); if it isn't found,
+CMake warns and skips the tests rather than failing, and `-DFOLIO_BUILD_TESTS=OFF`
+silences the warning. Planned later: freetype, harfbuzz.
 
 ```powershell
 git clone https://github.com/m3thm/folio.git
@@ -154,8 +158,26 @@ Run the compiler CLI:
 ./out/build/debug/folioc examples/hello.folio
 ```
 
-`folioc` lexes and parses the file. On success it prints a short outline of the
-page and its nodes and exits 0. On errors it prints diagnostics (with file,
-line, and column) to stderr and exits 1. Pass `--tokens` to also dump the token
-stream. Semantic analysis and export aren't implemented yet, so that is all it
+`folioc` lexes and parses the file. On success it prints a one-line summary and
+exits 0. On errors it prints diagnostics (with file, line, and column) to stderr
+and exits 1. Pass `--ast` to print the parsed tree instead of the summary (the
+format is described in `src/ast/ast_printer.hpp`), and `--tokens` to also dump the
+token stream. Semantic analysis and export aren't implemented yet, so that is all it
 does for now.
+
+```
+./out/build/debug/folioc --ast examples/hello.folio
+```
+
+### Tests
+
+```
+ctest --test-dir out/build/debug --output-on-failure
+```
+
+Most parser tests are golden files: each `.folio` in `tests/golden/` (and in
+`examples/`) is parsed, and the AST dump, or the diagnostics if it has errors,
+is compared with the checked-in `.expected.txt` next to it. After an intended
+change, regenerate them with `FOLIO_UPDATE_GOLDEN=1` (PowerShell:
+`$env:FOLIO_UPDATE_GOLDEN=1`) and review `git diff tests/golden`; the header of
+`tests/parser_tests.cpp` has the details.

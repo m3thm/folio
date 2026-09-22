@@ -5,12 +5,12 @@ what each owns, how data flows between them, and — most importantly — how
 to sequence the work so you have a usable tool (exporting real files) long
 before the GPU live-preview renderer is finished.
 
-**Status.** Steps 1-3 of section 8 are mostly done: the diagnostics engine,
-lexer, AST, and parser exist, `folioc` runs the lexer and parser on a file,
-and the parser accepts the full example in `LANGUAGE-SPEC.md` section 5 with
-no diagnostics. Not done yet: there is no `ast_printer` (`folioc` prints only
-a short outline of the parsed nodes), and there are no tests. Everything from
-sema onward is design only. Modules and files below are tagged _(implemented)_
+**Status.** Steps 1-3 of section 8 are done: the diagnostics engine, lexer,
+AST (with its `ast_printer`), and parser exist, `folioc` runs the lexer and
+parser on a file (`--ast` dumps the parsed tree), and the parser accepts the
+full example in `LANGUAGE-SPEC.md` section 5 with no diagnostics. The parser
+has golden-file tests (`tests/parser_tests.cpp`). Not done yet: the lexer unit
+tests (`tests/lexer_tests.cpp`). Everything from sema onward is design only. Modules and files below are tagged _(implemented)_
 or _(planned)_; where the code differs from the original sketch, this document
 describes the code.
 
@@ -59,12 +59,12 @@ A few decisions shape everything below:
 folio/
 ├── CMakeLists.txt
 ├── CMakePresets.json                 Windows-only presets (Ninja + vcpkg toolchain)
-├── vcpkg.json                        no dependencies yet
+├── vcpkg.json                        gtest (tests only); folioc itself has no dependencies
 ├── README.md
 ├── ARCHITECTURE.md                   (this file)
 ├── LANGUAGE-SPEC.md                  Phase 1 grammar spec
 ├── src/
-│   ├── main.cpp                      folioc CLI: lex, parse, report, print a short outline
+│   ├── main.cpp                      folioc CLI: lex, parse, report; --tokens / --ast dumps
 │   ├── diagnostics/
 │   │   ├── diagnostics.hpp           Diagnostic, Severity, SourceSpan
 │   │   └── diagnostics_engine.hpp/.cpp
@@ -74,7 +74,7 @@ folio/
 │   │   └── lexer.cpp
 │   ├── ast/
 │   │   ├── ast.hpp                   Expr/Fill/Stroke/NodeDecl/PageDecl/Document
-│   │   └── ast_printer.hpp/.cpp      (planned) debug dump, drives parser golden tests
+│   │   └── ast_printer.hpp/.cpp      canonical AST dump; drives the parser golden tests
 │   ├── parser/
 │   │   ├── parser.hpp/.cpp           top-level recursive descent
 │   │   └── expr_parser.hpp/.cpp      shared precedence-climbing parser
@@ -106,15 +106,16 @@ folio/
 │       │   └── svg_exporter.hpp/.cpp
 │       └── png/
 │           └── png_exporter.hpp/.cpp
-├── tests/                            (planned)
-│   ├── lexer_tests.cpp
-│   ├── parser_tests.cpp
-│   ├── sema_tests.cpp
-│   ├── shader_interpreter_tests.cpp
-│   ├── export_tests.cpp
+├── tests/
+│   ├── lexer_tests.cpp               (planned)
+│   ├── parser_tests.cpp              golden-file harness + printer tests
+│   ├── sema_tests.cpp                (planned)
+│   ├── shader_interpreter_tests.cpp  (planned)
+│   ├── export_tests.cpp              (planned)
 │   └── golden/
-│       ├── *.folio                   sample sources
-│       └── *.expected.{svg,txt}      checked-in expected output
+│       ├── *.folio                   sample sources (err_*.folio are the invalid ones)
+│       ├── *.expected.{svg,txt}      checked-in expected output
+│       └── examples/*.expected.txt   expected output for the files in examples/
 └── examples/
     ├── hello.folio                   minimal valid document
     ├── showcase.folio                the complete example from LANGUAGE-SPEC.md section 5
@@ -245,10 +246,31 @@ How the rest of the tree is shaped:
   `statements`. `PageDecl` and `Document { PageDecl page; std::vector<NodeDecl> nodes; }`
   are plain structs too.
 
-Write `ast_printer.hpp/.cpp` _(planned, not written yet)_ — a `std::visit`-based
-pretty-printer that dumps the tree back to a canonical text form — as part of
-this module, not as an afterthought. It's what your first parser tests will
-diff against.
+**`ast_printer.hpp/.cpp`** _(implemented)_ — `printAst(std::ostream&, const Document&)`
+(and a `std::string` overload) writes a canonical text dump of the tree. It is
+what `folioc --ast` prints and what the parser golden tests diff against.
+The exact format is documented at the top of `ast_printer.hpp`; the rules
+behind it are worth knowing when you read or change a dump:
+
+- **It dumps the tree, not the source.** Expressions are S-expressions with
+  every operator applied explicitly, so precedence is visible: `1 + 2 * 3`
+  prints as `(+ 1 (* 2 3))`. Grouping parentheses aren't kept in the AST, so
+  they never appear. `50%` (a unit) and `(% a b)` (modulo) can't be confused.
+- **It is canonical.** Properties always print in one fixed order (common
+  properties, the node's own, local variables, then children), whatever order
+  they were written in — the AST doesn't remember source order anyway, only
+  `statements` keeps it. Spans aren't printed, so reformatting a source file
+  doesn't change its dump.
+- **It is exhaustive.** `Expr` and `Fill` are printed by `std::visit` with one
+  overload per alternative, so a new `Expr`/`Fill` kind fails to compile until
+  the printer handles it. It also tolerates the half-filled tree left after a
+  parse error (missing pieces print as `?` or are skipped).
+- **Two things it can't show**, because the AST can't: an `image` with a missing
+  `source` looks the same as `import("")` (both print no `source` line), and a
+  `path` with `points: []` looks the same as one with no `points`.
+
+Adding a field to the AST means adding it to the printer in the same change,
+and regenerating the goldens (section 5) to see it in the dumps.
 
 ### `parser/` _(implemented)_
 
@@ -503,21 +525,43 @@ avoids heap-allocating every single leaf node.
 
 ## 5. Diagnostics-driven testing strategy
 
-- **`tests/lexer_tests.cpp`** — no tests exist yet, but the gtest scaffold in
-  `CMakeLists.txt` is commented out and ready (add `gtest` to `vcpkg.json`
-  first). Cover explicitly: unterminated strings, unterminated block comments
+- **`tests/lexer_tests.cpp`** _(planned)_ — the test build is already wired
+  (the `folio_tests` target in `CMakeLists.txt`; add this file to it). Cover
+  explicitly: unterminated strings, unterminated block comments
   (including `/*/`, and a properly closed comment right before one that isn't),
   hex-color length validation (3/4/6/8 digits), lone `&` / `|`, and `=` vs
   `==` vs `=>`. The `#RGB` /
   `#RGBA` shorthand expansion happens in the parser, so it belongs in the
   parser tests. Use small inline snippets for token-stream tests;
   `examples/errors.folio` already exercises most of the lexical errors.
-- **`tests/parser_tests.cpp`** — golden-file based: `.folio` snippet in →
-  `ast_printer` text dump out, diffed against a checked-in `.expected.txt`.
-  Far less brittle than asserting on individual AST fields per test.
-  `examples/errors.folio` is a ready-made seed for the diagnostics goldens.
-  Include duplicate properties (node body and `page`, and the same property
-  name on different nodes, which is _not_ an error).
+- **`tests/parser_tests.cpp`** _(implemented)_ — golden-file based: every
+  `.folio` in `tests/golden/` and `examples/` goes through the real lexer and
+  parser, and the result is diffed against a checked-in `.expected.txt`. If the
+  parse succeeds that is the `ast_printer` dump; if it reports errors it is
+  the diagnostics text (colors stripped), so one harness checks both the tree
+  and the error messages and their locations. This is far less brittle than
+  asserting on individual AST fields, and a failure prints the first
+  differing line plus the whole actual output.
+
+  Cases are files, so adding one means adding a `name.folio` and generating
+  its expected file with `FOLIO_UPDATE_GOLDEN=1` (see the header of the test
+  file). **Read the generated file before committing it**: a golden nobody
+  reviewed only proves the parser agrees with itself. Expected output for
+  `examples/foo.folio` lives in `tests/golden/examples/foo.expected.txt`.
+
+  Today's cases: expression precedence and associativity, leaf expressions and
+  references, every fill and stroke form, every node type, the shader
+  expression language, string escapes, comments, custom page sizes, and the
+  three examples; plus one small file per diagnostic (unterminated block
+  comment, duplicate properties in nodes and the page, reserved names,
+  unknown property, `%` in a page size, missing shader `return`, wrong color
+  argument counts). `examples/errors.folio`'s golden currently records the
+  cascading follow-on errors, so it will change when those are cleaned up.
+  A few direct tests cover what a golden can't express (property order in the
+  source not affecting the dump, local variables keeping source order) and
+  guard the fixtures themselves (a golden directory that isn't found, or an
+  `.expected.txt` whose source was deleted, fails instead of passing silently).
+
 - **`tests/sema_tests.cpp`** — this is where the interesting bugs will
   actually live (percentage cascades through nested groups, reference
   cycles, `self.` references in either property order). Write these
@@ -559,11 +603,14 @@ folio_render     (render/*)                                     — GPU backend,
 folioc           CLI: links folio_frontend + folio_shader + folio_export (+ folio_render optionally)
 ```
 
-Today there is a single `folio_core` library (diagnostics, lexer, parser; the
-AST is header-only) and the `folioc` executable; the split above happens as
-sema, shader, and export land. `vcpkg.json` is empty, and the presets in
-`CMakePresets.json` are Windows-only (Ninja generator + vcpkg toolchain), so
-other platforms configure manually — see the README.
+Today there is a single `folio_core` library (diagnostics, lexer, parser, and
+the AST printer; the AST itself is header-only), the `folioc` executable, and
+the `folio_tests` executable; the split above happens as sema, shader, and
+export land. `vcpkg.json` lists only `gtest`, which is used by the tests: where
+gtest isn't installed (Linux/macOS without it), CMake skips `folio_tests` with
+a warning instead of failing, so `folioc` still builds with no dependencies.
+The presets in `CMakePresets.json` are Windows-only (Ninja generator + vcpkg
+toolchain), so other platforms configure manually — see the README.
 
 This means `folio_frontend` + `folio_shader` + their tests build and run
 with an **empty `vcpkg.json`**, exactly as today, for as long as possible
@@ -600,9 +647,10 @@ The dependency graph in section 6 is also the recommended sequence — each step
 unlocks something runnable end-to-end:
 
 1. **`diagnostics/`** — small, everything else leans on it immediately. _(done)_
-2. **`ast/`** (+ `ast_printer`) — no logic yet, just the tree shape. _(AST done; `ast_printer` outstanding)_
-3. **`parser/`** — `parser.cpp` + shared `expr_parser.cpp` _(parser done and run by `folioc`; milestone only partly reached)_. First
-   milestone: `folioc` can parse a `.folio` file and pretty-print its AST.
+2. **`ast/`** (+ `ast_printer`) — no logic yet, just the tree shape. _(done)_
+3. **`parser/`** — `parser.cpp` + shared `expr_parser.cpp` _(done)_. First
+   milestone: `folioc` can parse a `.folio` file and pretty-print its AST
+   _(reached: `folioc --ast`)_.
 4. **`sema/`** — all five passes. Second milestone: `folioc` can report
    "3 nodes, page 595x842pt, no errors" for a real file, with reference
    cycles and bad percentages caught and reported.
@@ -617,11 +665,12 @@ unlocks something runnable end-to-end:
     `window`) — live preview. Everything above already works without it,
     so it's no longer blocking the rest of the tool.
 
-**Where things stand:** the parser is written and `folioc` runs it, but step
-3's milestone isn't fully reached: until `ast_printer` exists, `folioc` prints
-only a short outline of the parsed nodes (an interim function in `main.cpp`)
-instead of dumping the whole tree. Closing that out, plus the first
-lexer/parser golden tests, is what remains before starting sema.
+**Where things stand:** steps 1-3 are done and their first milestone is
+reached: `folioc --ast` dumps the parsed tree, and the parser has golden-file
+tests. What remains before sema is small: the lexer unit tests
+(`tests/lexer_tests.cpp`, see section 5). Sema itself can start with
+`symbol_table` and the standalone `DependencyGraph`, neither of which needs
+the other passes to exist first.
 
 By the end of step 7 you have a command-line compiler that turns `.folio`
 source into a real SVG file — a genuinely useful, demoable tool — without

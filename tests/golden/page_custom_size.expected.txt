@@ -1,0 +1,5 @@
+document
+  page
+    size: 21cm, 29.7cm
+    background: solid(#102030)
+    margin: 0.5in

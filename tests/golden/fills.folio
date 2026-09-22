@@ -1,0 +1,29 @@
+// Every kind of fill. Hex shorthand must be expanded (#F80 -> #FF8800) and the
+// digits keep the case they were written in.
+page { size: A4 }
+
+rect solid_hex3 { fill: #F80 }
+rect solid_hex4 { fill: #F80C }
+rect solid_hex6 { fill: #FF8800 }
+rect solid_hex8 { fill: #FF880080 }
+rect solid_lowercase { fill: #abcdef }
+rect solid_rgb { fill: rgb(255, 128, 0) }
+rect solid_rgba { fill: rgba(255, 128, 0, 0.5) }
+rect solid_hsl { fill: hsl(30, 1, 0.5) }
+rect solid_rgb_with_expr { fill: rgb(255 * 0.5, 128, 0) }
+
+rect linear_angle { fill: linear_gradient(90, #000000 @ 0, #FFFFFF @ 1) }
+rect linear_no_positions { fill: linear_gradient(45, #FF0000, #00FF00, #0000FF) }
+rect linear_points { fill: linear_gradient((0, 0) -> (100pt, 50%), #000000 @ 0, #FFFFFF @ 1) }
+rect linear_computed { fill: linear_gradient(45 + 45, rgb(1, 2, 3) @ 0.25, #FFF @ 0.75) }
+rect radial_radius_only { fill: radial_gradient(50, #FFD700 @ 0, #FF8C00 @ 1) }
+rect radial_with_center { fill: radial_gradient(50pt at (10pt, 20pt), #FFD700, #FF8C00) }
+
+rect textured { fill: texture(import("bg.png")) }
+
+rect shaded {
+  fill: shader {
+    d: float = length(pixel - vec2(50, 50));
+    return vec4(d, d, d, 1);
+  }
+}

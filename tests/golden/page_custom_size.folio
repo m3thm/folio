@@ -1,0 +1,6 @@
+// An explicit page size in mixed units, plus a margin and a solid background.
+page {
+  size: 21cm, 29.7cm
+  background: #102030
+  margin: 0.5in
+}

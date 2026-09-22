@@ -1,0 +1,19 @@
+page {
+  size: A4
+  size: A3
+}
+
+rect a {
+  x: 1
+  x: 2
+}
+
+circle c {
+  radius: 5
+  radius: 6
+}
+
+text t {
+  content: "a"
+  content: "b"
+}

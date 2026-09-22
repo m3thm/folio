@@ -1,0 +1,8 @@
+err_page_percent.folio:2:11: error: percentages aren't allowed in a page 'size' or 'margin'; use an absolute unit (pt, px, mm, cm, in)
+   size: 50%, 100pt
+           ^
+
+err_page_percent.folio:3:13: error: percentages aren't allowed in a page 'size' or 'margin'; use an absolute unit (pt, px, mm, cm, in)
+   margin: 10%
+             ^
+

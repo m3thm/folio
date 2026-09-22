@@ -1,0 +1,21 @@
+document
+  page
+    size: A4
+  rect leaves
+    local every_unit = (+ (+ (+ (+ 1px 2pt) 3mm) 4cm) 5in)
+    local decimals = (+ 0.5 12.25)
+    local yes = true
+    local no = false
+    local color_in_expr = #ff8800
+    local from_self = (* self.width 0.5)
+    local from_parent = parent.height
+    local from_page = (- page.width page.margin)
+    local from_sibling = (+ badge.x 10pt)
+  rect placed
+    x: (+ badge.x 10pt)
+    y: (- page.height 40pt)
+    width: 120pt
+    height: (* self.width 0.5)
+    rotation: 45
+    opacity: 0.8
+    z: 2

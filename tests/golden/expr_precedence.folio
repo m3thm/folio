@@ -1,0 +1,25 @@
+// Operator precedence and associativity. Locals are used so that every line is
+// just one expression; the dump shows the tree the parser built, so e.g.
+// `1 + 2 * 3` must come out as (+ 1 (* 2 3)).
+page { size: A4 }
+
+rect precedence {
+  mul_binds_tighter = 1 + 2 * 3
+  grouped = (1 + 2) * 3
+  sub_is_left_assoc = 10 - 4 - 3
+  div_is_left_assoc = 100 / 5 / 2
+  mod_and_mul_same_level = 7 % 3 * 2
+  percent_unit = 50%
+  percent_in_sum = 50% + 10pt
+  negate_binds_to_operand = -x * 2
+  negate_group = -(1 + 2)
+  not_operand = !flag
+  compare_below_add = a + 1 < b * 2
+  equality_below_compare = a < b == c > d
+  and_binds_tighter_than_or = a || b && c
+  grouped_or = (a || b) && c
+  ternary = a ? b : c
+  ternary_is_right_assoc = a ? b : c ? d : e
+  ternary_condition = a + 1 > 2 ? 10 : 20
+  ternary_in_then_branch = a ? b ? 1 : 2 : 3
+}

@@ -1,0 +1,8 @@
+document
+  page
+    size: A4
+  rect a
+    x: 1
+    y: 2
+  rect b
+    x: 3

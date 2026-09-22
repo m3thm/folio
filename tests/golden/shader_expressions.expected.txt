@@ -1,0 +1,18 @@
+document
+  page
+    size: A4
+  rect shader_showcase
+    fill: shader
+      swizzle_ident: float = (swizzle uv x)
+      swizzle_chain: float = (swizzle (swizzle pixel xy) x)
+      swizzle_on_call: vec2 = (swizzle mix(uv, pixel, 0.5) xy)
+      vec_ctor: vec4 = vec4(1, 2, 3, 4)
+      nested_calls: float = clamp((+ sin((* (swizzle pixel x) 3)) cos((swizzle pixel y))), 0, 1)
+      modulo_touching: float = (% 7 3)
+      modulo_spaced: float = (% 7 3)
+      arithmetic: float = (- (+ 1 (* 2 3)) (/ 4 2))
+      negated_call: float = (* (neg abs((swizzle uv x))) 2)
+      logic: bool = (|| (&& (> (swizzle uv x) 0.5) (< (swizzle uv y) 0.5)) (not (== (swizzle uv x) 0)))
+      ternary: float = (? (> (swizzle uv x) 0.5) 1 (? (> (swizzle uv y) 0.5) 2 3))
+      hex: vec4 = #FF8800
+      return mix(hex, vec4(0, 0, 0, 1), smoothstep(0, 1, (swizzle uv x)))

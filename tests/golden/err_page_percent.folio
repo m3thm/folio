@@ -1,0 +1,4 @@
+page {
+  size: 50%, 100pt
+  margin: 10%
+}

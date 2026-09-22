@@ -1,0 +1,10 @@
+// Escape sequences are decoded by the lexer and re-encoded by the printer, and
+// non-ASCII text passes through untouched.
+page { size: A4 }
+
+text escapes {
+  content: "line one\nline two\ttabbed \"quoted\" back\\slash"
+  font: "Name With \"Quotes\""
+}
+
+text unicode { content: "café — ✓" }

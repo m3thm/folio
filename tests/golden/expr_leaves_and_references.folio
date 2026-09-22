@@ -1,0 +1,25 @@
+// Leaf expressions (every unit, decimals, booleans, colors) and the four kinds
+// of property reference, both inside locals and as real property values.
+page { size: A4 }
+
+rect leaves {
+  every_unit = 1px + 2pt + 3mm + 4cm + 5in
+  decimals = 0.5 + 12.25
+  yes = true
+  no = false
+  color_in_expr = #f80
+  from_self = self.width * 0.5
+  from_parent = parent.height
+  from_page = page.width - page.margin
+  from_sibling = badge.x + 10pt
+}
+
+rect placed {
+  x: badge.x + 10pt
+  y: page.height - 40pt
+  width: 120pt
+  height: self.width * 0.5
+  rotation: 45
+  opacity: 0.8
+  z: 2
+}
