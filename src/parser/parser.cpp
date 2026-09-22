@@ -784,11 +784,11 @@ namespace folio {
     GradientStop Parser::parseStop()
     {
         Expr color = parseColorLiteral();
-        std::optional<Expr> position;
+        std::optional<Expr> stopPosition;
         if (match(TokenKind::At)) {
-            position = parseExpr();
+            stopPosition = parseExpr();
         }
-        return GradientStop{ std::move(color), std::move(position) };
+        return GradientStop{ std::move(color), std::move(stopPosition) };
     }
 
     Fill Parser::parseTextureFill()

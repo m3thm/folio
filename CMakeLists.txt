@@ -57,6 +57,7 @@ if (FOLIO_BUILD_TESTS)
         enable_testing()
 
         add_executable(folio_tests
+            tests/lexer_tests.cpp
             tests/parser_tests.cpp
         )
         target_link_libraries(folio_tests PRIVATE folio_core GTest::gtest GTest::gtest_main)

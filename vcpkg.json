@@ -1,6 +1,7 @@
 {
   "name": "folio",
   "version": "0.1.0",
+  "builtin-baseline": "6e856794aebd1ee877acb74c9264d9552903c6fe",
   "dependencies": [
     "gtest"
   ]

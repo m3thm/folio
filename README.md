@@ -29,7 +29,7 @@ nothing renders or exports yet.
 | Shader IR, CPU interpreter, WGSL codegen | Not started                                                                                                                                                            |
 | SVG / PNG / PDF export                   | Not started                                                                                                                                                            |
 | Live GPU preview                         | Not started                                                                                                                                                            |
-| Tests                                    | Started — golden-file parser tests (which also cover lexer errors and the AST printer); lexer unit tests and tests for everything after the parser are not written yet |
+| Tests                                    | Started — lexer unit tests and golden-file parser tests (which also cover the AST printer); nothing after the parser has tests yet                                    |
 
 The rest of this README describes the language as specified and the planned
 pipeline; [`ARCHITECTURE.md`](ARCHITECTURE.md) has the module breakdown and

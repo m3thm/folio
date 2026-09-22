@@ -10,7 +10,7 @@ AST (with its `ast_printer`), and parser exist, `folioc` runs the lexer and
 parser on a file (`--ast` dumps the parsed tree), and the parser accepts the
 full example in `LANGUAGE-SPEC.md` section 5 with no diagnostics. The parser
 has golden-file tests (`tests/parser_tests.cpp`). Not done yet: the lexer unit
-tests (`tests/lexer_tests.cpp`). Everything from sema onward is design only. Modules and files below are tagged _(implemented)_
+tests. Everything from sema onward is design only. Modules and files below are tagged _(implemented)_
 or _(planned)_; where the code differs from the original sketch, this document
 describes the code.
 
@@ -107,7 +107,7 @@ folio/
 │       └── png/
 │           └── png_exporter.hpp/.cpp
 ├── tests/
-│   ├── lexer_tests.cpp               (planned)
+│   ├── lexer_tests.cpp               direct unit tests
 │   ├── parser_tests.cpp              golden-file harness + printer tests
 │   ├── sema_tests.cpp                (planned)
 │   ├── shader_interpreter_tests.cpp  (planned)
@@ -525,15 +525,21 @@ avoids heap-allocating every single leaf node.
 
 ## 5. Diagnostics-driven testing strategy
 
-- **`tests/lexer_tests.cpp`** _(planned)_ — the test build is already wired
-  (the `folio_tests` target in `CMakeLists.txt`; add this file to it). Cover
-  explicitly: unterminated strings, unterminated block comments
-  (including `/*/`, and a properly closed comment right before one that isn't),
-  hex-color length validation (3/4/6/8 digits), lone `&` / `|`, and `=` vs
-  `==` vs `=>`. The `#RGB` /
-  `#RGBA` shorthand expansion happens in the parser, so it belongs in the
-  parser tests. Use small inline snippets for token-stream tests;
-  `examples/errors.folio` already exercises most of the lexical errors.
+- **`tests/lexer_tests.cpp`** _(implemented)_ — direct: a small inline
+  snippet in, an exact token sequence (kind + lexeme, and span for the
+  error cases) or diagnostic out, asserted on the real `Token`/`Diagnostic`
+  types rather than printed text. Covers: number/identifier boundary cases
+  (a bare `.5`, a trailing `5.`, a unit or `%` lexing as a separate token
+  from the number), unterminated strings and their escapes, unterminated
+  block comments (including `/*/`, non-nesting, and a closed comment right
+  before one that isn't), hex-color length validation (3/4/6/8 digits) and
+  what happens to non-hex characters after `#`, lone `&`/`|`, `=` vs `==`
+  vs `=>`, every other punctuation token, and that independent errors on
+  one line are all reported rather than stopping at the first. `#RGB`/
+  `#RGBA` shorthand expansion happens in the parser, so it's covered by the
+  parser tests, not these. `examples/errors.folio`'s golden already
+  exercises most of these lexical errors end-to-end; this file is what
+  pins down the exact token/span for each one.
 - **`tests/parser_tests.cpp`** _(implemented)_ — golden-file based: every
   `.folio` in `tests/golden/` and `examples/` goes through the real lexer and
   parser, and the result is diffed against a checked-in `.expected.txt`. If the
@@ -665,12 +671,10 @@ unlocks something runnable end-to-end:
     `window`) — live preview. Everything above already works without it,
     so it's no longer blocking the rest of the tool.
 
-**Where things stand:** steps 1-3 are done and their first milestone is
-reached: `folioc --ast` dumps the parsed tree, and the parser has golden-file
-tests. What remains before sema is small: the lexer unit tests
-(`tests/lexer_tests.cpp`, see section 5). Sema itself can start with
-`symbol_table` and the standalone `DependencyGraph`, neither of which needs
-the other passes to exist first.
+**Where things stand:** steps 1-3 are done, their first milestone is
+reached (`folioc --ast` dumps the parsed tree), and both the lexer and the
+parser have tests (section 5). Sema can start now: `symbol_table` and the
+standalone `DependencyGraph` don't need the other passes to exist first.
 
 By the end of step 7 you have a command-line compiler that turns `.folio`
 source into a real SVG file — a genuinely useful, demoable tool — without
