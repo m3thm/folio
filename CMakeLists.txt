@@ -15,7 +15,9 @@ add_library(folio_core
     src/lexer/lexer.cpp
     src/parser/parser.cpp
     src/parser/expr_parser.cpp
-    src/diagnostics/diagnostics_engine.cpp)
+    src/diagnostics/diagnostics_engine.cpp
+    src/sema/symbol_table.cpp
+    src/sema/dimension_resolver.cpp)
 
 target_include_directories(folio_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -59,6 +61,7 @@ if (FOLIO_BUILD_TESTS)
         add_executable(folio_tests
             tests/lexer_tests.cpp
             tests/parser_tests.cpp
+            tests/sema_tests.cpp
         )
         target_link_libraries(folio_tests PRIVATE folio_core GTest::gtest GTest::gtest_main)
         target_compile_definitions(folio_tests PRIVATE FOLIO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
