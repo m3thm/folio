@@ -13,7 +13,7 @@
 
 namespace folio {
 
-    // ---- Vertex: identity for one (node, property) / page-property / statement-local ----
+    //,-- Vertex: identity for one (node, property) / page-property / statement-local,--
     //
     // Kept out of the header (see reference_resolver.hpp) so callers only ever
     // see ReferenceResolver's query API, never the graph itself.
@@ -203,11 +203,11 @@ namespace {
     }
 
     // Walks `expr`, registering an edge from `owner` to every reference, `%`,
-    // and statement local it uses. Structural only -- no values are read, so
+    // and statement local it uses. Structural only, no values are read, so
     // this can run before anything is evaluated (a group's own width may
     // itself be a reference; see dimension_resolver.hpp). Remembers each
     // reference's resolved target in `refTarget` so evaluate() (below) doesn't
-    // need to re-resolve it -- and re-diagnose it a second time.
+    // need to re-resolve it, and re-diagnose it a second time.
     void collectEdges(const Expr& expr, Vertex owner, const NodeDecl* owningNode,
         const std::vector<PercentAxis>& percentAxes, bool diagnoseIllegalPercent,
         DependencyGraph<Vertex>& graph, const SymbolTable& symbols, const DimensionResolver& dims,
@@ -220,7 +220,7 @@ namespace {
                 if (node.unit != Unit::Percent) return;
                 if (percentAxes.empty()) {
                     // Illegal here; dimension_resolver already diagnosed this for
-                    // ordinary node properties (see checkPercentLegality) -- only
+                    // ordinary node properties (see checkPercentLegality), only
                     // statement locals reach this pass undiagnosed.
                     if (diagnoseIllegalPercent) engine.error(expr.span, "'%' is not permitted here");
                     return;
@@ -338,7 +338,7 @@ namespace {
             else {
                 // BoolExpr, StringExpr, ColorExpr, SwizzleExpr, CallExpr: none of
                 // these are reachable from `expr`'s own grammar (2.1's primary_num
-                // doesn't list them) -- defensive, in case that ever changes.
+                // doesn't list them), defensive, in case that ever changes.
                 engine.error(expr.span, "expected a number");
                 return 0.0;
             }

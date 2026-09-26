@@ -9,9 +9,9 @@
 #include <optional>
 
 // Implements LANGUAGE-SPEC.md 4.2: builds one dependency graph over
-// (node, property) pairs -- plus page.width/height/margin and statement
+// (node, property) pairs, plus page.width/height/margin and statement
 // locals, which need vertices too even though they aren't all externally
-// referenceable -- with an edge for every self./parent./page./IDENT.
+// referenceable, with an edge for every self./parent./page./IDENT.
 // reference, every `%` (via dimension_resolver), and every statement local
 // used. Topologically sorts it and evaluates each vertex in that order.
 //

@@ -18,7 +18,8 @@ add_library(folio_core
     src/diagnostics/diagnostics_engine.cpp
     src/sema/symbol_table.cpp
     src/sema/dimension_resolver.cpp
-    src/sema/reference_resolver.cpp)
+    src/sema/reference_resolver.cpp
+    src/sema/shader_typecheck.cpp)
 
 target_include_directories(folio_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
